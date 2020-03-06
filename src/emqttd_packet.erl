@@ -67,7 +67,7 @@ format_variable(undefined, _) ->
 format_variable(Variable, undefined) ->
     format_variable(Variable);
 format_variable(Variable, Payload) ->
-    io_lib:format("~s, Payload=~W", [format_variable(Variable), Payload, 32]).
+    io_lib:format("~s, Payload=~W", [format_variable(Variable), Payload, 256]).
 
 format_variable(#mqtt_packet_connect{
                  proto_ver     = ProtoVer,
