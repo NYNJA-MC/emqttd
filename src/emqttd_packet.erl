@@ -56,7 +56,7 @@ format_header(#mqtt_packet_header{type = Type,
                                   dup = Dup,
                                   qos = QoS,
                                   retain = Retain}, S) ->
-    S1 = if 
+    S1 = if
              S == undefined -> <<>>;
              true           -> [", ", S]
          end,
@@ -67,7 +67,7 @@ format_variable(undefined, _) ->
 format_variable(Variable, undefined) ->
     format_variable(Variable);
 format_variable(Variable, Payload) ->
-    io_lib:format("~s, Payload=~p", [format_variable(Variable), Payload]).
+    io_lib:format("~s, Payload=~W", [format_variable(Variable), Payload, 256]).
 
 format_variable(#mqtt_packet_connect{
                  proto_ver     = ProtoVer,
@@ -78,13 +78,13 @@ format_variable(#mqtt_packet_connect{
                  clean_sess    = CleanSess,
                  keep_alive    = KeepAlive,
                  client_id     = ClientId,
-                 will_topic    = WillTopic, 
-                 will_msg      = WillMsg, 
-                 username      = Username, 
+                 will_topic    = WillTopic,
+                 will_msg      = WillMsg,
+                 username      = Username,
                  password      = Password}) ->
     Format = "ClientId=~s, ProtoName=~s, ProtoVsn=~p, CleanSess=~s, KeepAlive=~p, Username=~s, Password=~s",
     Args = [ClientId, ProtoName, ProtoVer, CleanSess, KeepAlive, Username, format_password(Password)],
-    {Format1, Args1} = if 
+    {Format1, Args1} = if
                         WillFlag -> { Format ++ ", Will(Q~p, R~p, Topic=~s, Msg=~s)",
                                       Args ++ [WillQoS, i(WillRetain), WillTopic, WillMsg] };
                         true -> {Format, Args}
