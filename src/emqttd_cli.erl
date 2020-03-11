@@ -223,6 +223,11 @@ routes(_) ->
 %%--------------------------------------------------------------------
 %% @doc Topics Command
 
+mnesia_tab2list(Tab) ->
+    {atomic, List} =
+        mnesia:transaction(fun() -> mnesia:foldr(fun(X, Xs) -> [X | Xs] end, [], Tab) end),
+    List.
+
 topics(["list"]) ->
     lists:foreach(fun(Topic) -> ?PRINT("~s~n", [Topic]) end, emqttd:topics());
 
@@ -236,10 +241,10 @@ topics(_) ->
 subscriptions(["list"]) ->
     lists:foreach(fun(Subscription) ->
                       print(subscription, Subscription)
-                  end, ets:tab2list(mqtt_subscription));
+                  end, mnesia_tab2list(mqtt_subscription));
 
 subscriptions(["show", ClientId]) ->
-    case ets:lookup(mqtt_subscription, bin(ClientId)) of
+    case mnesia:dirty_read(mqtt_subscription, bin(ClientId)) of
         []      -> ?PRINT_MSG("Not Found.~n");
         Records -> [print(subscription, Subscription) || Subscription <- Records]
     end;

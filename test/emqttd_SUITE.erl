@@ -222,8 +222,8 @@ pubsub(_) ->
     ok = emqttd:subscribe(<<"a/b/c">>, Self, [{qos, 1}]),
     ?assertMatch({error, _}, emqttd:subscribe(<<"a/b/c">>, Self, [{qos, 2}])),
     timer:sleep(10),
-    [{mqtt_subscription, Self, <<"a/b/c">>}] = ets:lookup(mqtt_subscription, Self),
-    [{mqtt_subscriber, <<"a/b/c">>, Self}]   = ets:lookup(mqtt_subscriber, <<"a/b/c">>),
+    [{mqtt_subscription, Self, <<"a/b/c">>}] = mnesia:dirty_read(mqtt_subscription, Self),
+    [{mqtt_subscriber, <<"a/b/c">>, Self}]   = mnesia:dirty_read(mqtt_subscriber, <<"a/b/c">>),
     emqttd:publish(emqttd_message:make(ct, <<"a/b/c">>, <<"hello">>)),
     ?assert(receive {dispatch, <<"a/b/c">>, _} -> true after 2 -> false end),
     spawn(fun() ->

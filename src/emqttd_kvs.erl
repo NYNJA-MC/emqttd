@@ -10,7 +10,7 @@ tables()   -> [ #table{name=mqtt_subproperty,
 
                 #table{name=mqtt_subscription,
                        fields=record_info(fields,mqtt_subscription),
-                       copy_type=disc_copies, type=bag},
+                       copy_type=disc_only_copies, type=bag},
 
                 #table{name=mqtt_subscriber,
                        fields=record_info(fields,mqtt_subscriber),

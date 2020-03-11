@@ -137,7 +137,7 @@ subscriptions(Subscriber) ->
                 subscription(Topic, Subscriber);
                  ({mqtt_subscription,_, Topic}) ->
                 subscription(Topic, Subscriber)
-        end, ets:lookup(mqtt_subscription, Subscriber)).
+        end, mnesia:dirty_read(mqtt_subscription, Subscriber)).
 
 subscription(Topic, Subscriber) ->
     {Topic, Subscriber, ets:lookup_element(mqtt_subproperty, {Topic, Subscriber}, 3)}.
@@ -162,8 +162,22 @@ cast(Server, Msg) when is_pid(Server) ->
 pick(Subscriber) ->
     gproc_pool:pick_worker(server, Subscriber).
 
+mnesia_tab2list(Tab) ->
+    {atomic, List} =
+        mnesia:transaction(fun() -> mnesia:foldr(fun(X, Xs) -> [X | Xs] end, [], Tab) end),
+    List.
+
+mnesia_member(Tab, Key) ->
+    {atomic, Res} = mnesia:transaction(fun() ->
+                        mnesia:select(Tab, [{{Tab, Key, '_'}, [], [found]}], 1, read)
+                    end),
+    case Res of
+        [found]         -> true;
+        '$end_of_table' -> false
+    end.
+
 dump() ->
-    [{Tab, ets:tab2list(Tab)} || Tab <- [mqtt_subproperty, mqtt_subscription, mqtt_subscriber]].
+    [{Tab, mnesia_tab2list(Tab)} || Tab <- [mqtt_subproperty, mqtt_subscription, mqtt_subscriber]].
 
 %%--------------------------------------------------------------------
 %% gen_server Callbacks
@@ -269,7 +283,7 @@ do_unsubscribe_(Topic, Subscriber, State) ->
             del_subscription_(Share, Subscriber, Topic),
 %            ets:delete(mqtt_subproperty, {Topic, Subscriber}),
             kvs:delete(mqtt_subproperty, {Topic, Subscriber}),
-            {ok, case ets:member(mqtt_subscription, Subscriber) of
+            {ok, case mnesia_member(mqtt_subscription, Subscriber) of
                 true  -> State;
                 false -> demonitor_subpid(Subscriber, State)
             end};
@@ -294,5 +308,5 @@ subscriber_down_(_Subscriber) ->
 
 setstats(State) ->
     emqttd_stats:setstats('subscriptions/count', 'subscriptions/max',
-                          ets:info(mqtt_subscription, size)), State.
+                          mnesia:table_info(mqtt_subscription, size)), State.
 
