@@ -67,6 +67,9 @@ handle_info({mnesia_system_event, {mnesia_down, Node}}, State) ->
 handle_info({mnesia_system_event, {mnesia_up, _Node}}, State) ->
     {noreply, State};
 
+handle_info({mnesia_system_event, {mnesia_overload, _Node}}, State) ->
+    {noreply, State};
+
 handle_info(tick, State) ->
     {noreply, setstats(State), hibernate};
 
