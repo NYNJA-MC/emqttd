@@ -258,7 +258,9 @@ handle_info({mnesia_system_event, {inconsistent_database, Context, Node}}, State
     {noreply, State};
 
 handle_info({mnesia_system_event, {mnesia_overload, Details}}, State) ->
-    lager:critical("Mnesia overload: ~p~n", [Details]),
+    %% The message is badly named, this rather means that mnesia wasn't able
+    %% to follow the VM-args indicating how often log should be dumped.
+    lager:info("Mnesia overload: ~p~n", [Details]),
     {noreply, State};
 
 handle_info({mnesia_system_event, _Event}, State) ->
