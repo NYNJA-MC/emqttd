@@ -52,7 +52,7 @@ start(_Type, _Args) ->
                            {?MODULE,register_acl_mod,[]},
                            {emqttd_plugins,init,[]},
                            {?MODULE,start_listeners,[]},
-                           {register,[emqttd, self()]}] ],
+                           {erlang, register,[emqttd, self()]}] ],
     print_vsn(),
     {ok, Sup}.
 
