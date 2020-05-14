@@ -15,13 +15,13 @@
 %%--------------------------------------------------------------------
 
 -module(emqttd_router).
--compile({parse_transform, lager_transform}).
 
 -author("Feng Lee <feng@emqtt.io>").
 
 -behaviour(gen_server).
 
 -include("emqttd.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 %% Mnesia Bootstrap
 -export([mnesia/1]).
@@ -242,11 +242,11 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 handle_info({mnesia_system_event, {mnesia_up, Node}}, State) ->
-    lager:error("Mnesia up: ~p~n", [Node]),
+    ?LOG_ERROR("Mnesia up: ~p~n", [Node]),
     {noreply, State};
 
 handle_info({mnesia_system_event, {mnesia_down, Node}}, State) ->
-    lager:error("Mnesia down: ~p~n", [Node]),
+    ?LOG_ERROR("Mnesia down: ~p~n", [Node]),
     clean_routes_(Node),
     update_stats_(),
     {noreply, State, hibernate};
@@ -254,13 +254,13 @@ handle_info({mnesia_system_event, {mnesia_down, Node}}, State) ->
 handle_info({mnesia_system_event, {inconsistent_database, Context, Node}}, State) ->
     %% 1. Backup and restart
     %% 2. Set master nodes
-    lager:critical("Mnesia inconsistent_database event: ~p, ~p~n", [Context, Node]),
+    ?LOG_CRITICAL("Mnesia inconsistent_database event: ~p, ~p~n", [Context, Node]),
     {noreply, State};
 
 handle_info({mnesia_system_event, {mnesia_overload, Details}}, State) ->
     %% The message is badly named, this rather means that mnesia wasn't able
     %% to follow the VM-args indicating how often log should be dumped.
-    lager:info("Mnesia overload: ~p~n", [Details]),
+    ?LOG_INFO("Mnesia overload: ~p~n", [Details]),
     {noreply, State};
 
 handle_info({mnesia_system_event, _Event}, State) ->

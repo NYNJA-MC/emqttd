@@ -15,7 +15,6 @@
 %%--------------------------------------------------------------------
 
 -module(emqttd_protocol).
--compile({parse_transform, lager_transform}).
 
 -author("Feng Lee <feng@emqtt.io>").
 
@@ -24,6 +23,8 @@
 -include("emqttd_protocol.hrl").
 
 -include("emqttd_internal.hrl").
+
+-include_lib("kernel/include/logger.hrl").
 
 -import(proplists, [get_value/2, get_value/3]).
 
@@ -53,9 +54,10 @@
 
 -define(STATS_KEYS, [recv_pkt, recv_msg, send_pkt, send_msg]).
 
--define(LOG(Level, Format, Args, State),
-            lager:Level([{client, State#proto_state.client_id}], "Client(~s@~s): " ++ Format,
-                        [State#proto_state.client_id, esockd_net:format(State#proto_state.peername) | Args])).
+-define(LOCAL_LOG(Level, Format, Args, State),
+            ?LOG(Level, "Client(~s@~s): " ++ Format,
+                 [State#proto_state.client_id, esockd_net:format(State#proto_state.peername) | Args]),
+                 #{client => State#proto_state.client_id}).
 
 %% @doc Init protocol
 init(Peername, SendFun, Opts) ->
@@ -200,7 +202,7 @@ process(?CONNECT_PACKET(Var), State0) ->
                             exit({shutdown, Error})
                     end;
                 {error, Reason}->
-                    ?LOG(error, "Username '~s' login failed for ~p", [Username, Reason], State1),
+                    ?LOCAL_LOG(error, "Username '~s' login failed for ~p", [Username, Reason], State1),
                     {?CONNACK_CREDENTIALS, false, State1}
             end;
         ReturnCode ->
@@ -216,7 +218,7 @@ process(?CONNECT_PACKET(Var), State0) ->
 process(Packet = ?PUBLISH_PACKET(_Qos, Topic, _PacketId, _Payload), State = #proto_state{is_superuser = IsSuper}) ->
     case IsSuper orelse allow == check_acl(publish, Topic, client(State)) of
         true  -> publish(Packet, State);
-        false -> ?LOG(error, "Cannot publish to ~s for ACL Deny", [Topic], State)
+        false -> ?LOCAL_LOG(error, "Cannot publish to ~s for ACL Deny", [Topic], State)
     end,
     {ok, State};
 
@@ -252,7 +254,7 @@ process(?SUBSCRIBE_PACKET(PacketId, RawTopicTable),
                   end,
     case lists:member(deny, AllowDenies) of
         true ->
-            ?LOG(error, "Cannot SUBSCRIBE ~p for ACL Deny", [TopicTable], State),
+            ?LOCAL_LOG(error, "Cannot SUBSCRIBE ~p for ACL Deny", [TopicTable], State),
             send(?SUBACK_PACKET(PacketId, [16#80 || _ <- TopicTable]), State);
         false ->
             case emqttd_hooks:run('client.subscribe', [ClientId, Username], TopicTable) of
@@ -308,7 +310,7 @@ with_puback(Type, Packet = ?PUBLISH_PACKET(_Qos, PacketId),
         ok ->
             send(?PUBACK_PACKET(Type, PacketId), State);
         {error, Error} ->
-            ?LOG(error, "PUBLISH ~p error: ~p", [PacketId, Error], State)
+            ?LOCAL_LOG(error, "PUBLISH ~p error: ~p", [PacketId, Error], State)
     end.
 
 -spec(send(mqtt_message() | mqtt_packet(), proto_state()) -> {ok, proto_state()}).
@@ -326,10 +328,10 @@ send(Packet = ?PACKET(Type),
     {ok, State#proto_state{stats_data = Stats1}}.
 
 trace(recv, Packet, ProtoState) ->
-    ?LOG(info, "RECV ~s", [emqttd_packet:format(Packet)], ProtoState);
+    ?LOCAL_LOG(info, "RECV ~s", [emqttd_packet:format(Packet)], ProtoState);
 
 trace(send, Packet, ProtoState) ->
-    ?LOG(info, "SEND ~s", [emqttd_packet:format(Packet)], ProtoState).
+    ?LOCAL_LOG(info, "SEND ~s", [emqttd_packet:format(Packet)], ProtoState).
 
 inc_stats(_Direct, _Type, Stats = #proto_stats{enable_stats = false}) ->
     Stats;
@@ -364,7 +366,7 @@ shutdown(conflict, #proto_state{client_id = _ClientId}) ->
     ignore;
 
 shutdown(Error, State = #proto_state{will_msg = WillMsg}) ->
-    ?LOG(info, "Shutdown for ~p", [Error], State),
+    ?LOCAL_LOG(info, "Shutdown for ~p", [Error], State),
     Client = client(State),
     send_willmsg(Client, WillMsg),
     emqttd_hooks:run('client.disconnected', [Error], Client),
@@ -434,7 +436,7 @@ validate_clientid(#mqtt_packet_connect{proto_ver =?MQTT_PROTO_V4,
 
 validate_clientid(#mqtt_packet_connect{proto_ver  = ProtoVer,
                                        clean_sess = CleanSess}, ProtoState) ->
-    ?LOG(warning, "Invalid clientId. ProtoVer: ~p, CleanSess: ~s",
+    ?LOCAL_LOG(warning, "Invalid clientId. ProtoVer: ~p, CleanSess: ~s",
          [ProtoVer, CleanSess], ProtoState),
     false.
 

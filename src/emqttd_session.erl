@@ -44,7 +44,6 @@
 %%
 
 -module(emqttd_session).
--compile({parse_transform, lager_transform}).
 
 -behaviour(gen_server2).
 
@@ -55,6 +54,8 @@
 -include("emqttd_protocol.hrl").
 
 -include("emqttd_internal.hrl").
+
+-include_lib("kernel/include/logger.hrl").
 
 -import(emqttd_misc, [start_timer/2]).
 
@@ -164,9 +165,8 @@
                      await_rel_timeout, expiry_interval, enable_stats, force_gc_count,
                      created_at]).
 
--define(LOG(Level, Format, Args, State),
-            lager:Level([{client, State#state.client_id}],
-                        "Session(~s): " ++ Format, [State#state.client_id | Args])).
+-define(LOCAL_LOG(Level, Format, Args, State),
+            ?LOG(Level, "Session(~s): " ++ Format, [State#state.client_id | Args], #{client => State#state.client_id})).
 
 %% @doc Start a Session
 -spec(start_link(boolean(), {mqtt_client_id(), mqtt_username()}, pid()) -> {ok, pid()} | {error, any()}).
@@ -357,7 +357,7 @@ handle_call({publish, Msg = #mqtt_message{qos = ?QOS_2, pktid = PacketId}}, _Fro
                      end,
             reply(ok, State1#state{awaiting_rel = maps:put(PacketId, Msg, AwaitingRel)});
         true ->
-            ?LOG(warning, "Dropped Qos2 Message for too many awaiting_rel: ~p", [Msg], State),
+            ?LOCAL_LOG(warning, "Dropped Qos2 Message for too many awaiting_rel: ~p", [Msg], State),
             emqttd_metrics:inc('messages/qos2/dropped'),
             reply({error, dropped}, State)
     end;
@@ -378,18 +378,18 @@ handle_cast({subscribe, _From, TopicTable, AckFun},
             State = #state{client_id     = ClientId,
                            username      = Username,
                            subscriptions = Subscriptions}) ->
-    ?LOG(info, "Subscribe ~p", [TopicTable], State),
+    ?LOCAL_LOG(info, "Subscribe ~p", [TopicTable], State),
     {GrantedQos, Subscriptions1} =
     lists:foldl(fun({Topic, Opts}, {QosAcc, SubMap}) ->
                 NewQos = proplists:get_value(qos, Opts),
                 SubMap1 =
                 case maps:find(Topic, SubMap) of
                     {ok, NewQos} ->
-                        ?LOG(warning, "Duplicated subscribe: ~s, qos = ~w", [Topic, NewQos], State),
+                        ?LOCAL_LOG(warning, "Duplicated subscribe: ~s, qos = ~w", [Topic, NewQos], State),
                         SubMap;
                     {ok, OldQos} ->
                         emqttd:setqos(Topic, ClientId, NewQos),
-                        ?LOG(warning, "Duplicated subscribe ~s, old_qos=~w, new_qos=~w",
+                        ?LOCAL_LOG(warning, "Duplicated subscribe ~s, old_qos=~w, new_qos=~w",
                             [Topic, OldQos, NewQos], State),
                         maps:put(Topic, NewQos, SubMap);
                     error ->
@@ -406,7 +406,7 @@ handle_cast({unsubscribe, _From, TopicTable},
             State = #state{client_id     = ClientId,
                            username      = Username,
                            subscriptions = Subscriptions}) ->
-    ?LOG(info, "Unsubscribe ~p", [TopicTable], State),
+    ?LOCAL_LOG(info, "Unsubscribe ~p", [TopicTable], State),
     Subscriptions1 =
     lists:foldl(fun({Topic, Opts}, SubMap) ->
                 case maps:find(Topic, SubMap) of
@@ -429,7 +429,7 @@ handle_cast({puback, PacketId}, State = #state{inflight = Inflight}) ->
          true ->
              dequeue(acked(puback, PacketId, State));
          false ->
-             ?LOG(warning, "PUBACK ~p missed inflight: ~p",
+             ?LOCAL_LOG(warning, "PUBACK ~p missed inflight: ~p",
                   [PacketId, I:window(Inflight)], State),
              emqttd_metrics:inc('packets/puback/missed'),
              State
@@ -443,7 +443,7 @@ handle_cast({pubrec, PacketId}, State = #state{inflight = Inflight}) ->
          true ->
              acked(pubrec, PacketId, State);
          false ->
-             ?LOG(warning, "PUBREC ~p missed inflight: ~p",
+             ?LOCAL_LOG(warning, "PUBREC ~p missed inflight: ~p",
                   [PacketId, I:window(Inflight)], State),
              emqttd_metrics:inc('packets/pubrec/missed'),
              State
@@ -457,7 +457,7 @@ handle_cast({pubrel, PacketId}, State = #state{awaiting_rel = AwaitingRel}) ->
              spawn(emqttd_server, publish, [Msg]), %%:)
              gc(State#state{awaiting_rel = AwaitingRel1});
          error ->
-             ?LOG(warning, "Cannot find PUBREL: ~p", [PacketId], State),
+             ?LOCAL_LOG(warning, "Cannot find PUBREL: ~p", [PacketId], State),
              emqttd_metrics:inc('packets/pubrel/missed'),
              State
      end, hibernate};
@@ -470,7 +470,7 @@ handle_cast({pubcomp, PacketId}, State = #state{inflight = Inflight}) ->
          true ->
              dequeue(acked(pubcomp, PacketId, State));
          false ->
-             ?LOG(warning, "The PUBCOMP ~p is not inflight: ~p",
+             ?LOCAL_LOG(warning, "The PUBCOMP ~p is not inflight: ~p",
                   [PacketId, I:window( Inflight)], State),
              emqttd_metrics:inc('packets/pubcomp/missed'),
              State
@@ -485,14 +485,14 @@ handle_cast({resume, ClientId, ClientPid},
                            await_rel_timer = AwaitTimer,
                            expiry_timer    = ExpireTimer}) ->
 
-    ?LOG(info, "Resumed by ~p", [ClientPid], State),
+    ?LOCAL_LOG(info, "Resumed by ~p", [ClientPid], State),
 
     %% Cancel Timers
     lists:foreach(fun emqttd_misc:cancel_timer/1,
                   [RetryTimer, AwaitTimer, ExpireTimer]),
 
     case kick(ClientId, OldClientPid, ClientPid) of
-        ok -> ?LOG(warning, "~p kickout ~p", [ClientPid, OldClientPid], State);
+        ok -> ?LOCAL_LOG(warning, "~p kickout ~p", [ClientPid, OldClientPid], State);
         ignore -> ok
     end,
 
@@ -510,7 +510,7 @@ handle_cast({resume, ClientId, ClientPid},
     %% Clean Session: true -> false?
     if
         CleanSess =:= true ->
-            ?LOG(error, "CleanSess changed to false.", [], State1),
+            ?LOCAL_LOG(error, "CleanSess changed to false.", [], State1),
             emqttd_sm:register_session(ClientId, false, info(State1));
         CleanSess =:= false ->
             ok
@@ -521,12 +521,12 @@ handle_cast({resume, ClientId, ClientPid},
 
 handle_cast({destroy, ClientId},
             State = #state{client_id = ClientId, client_pid = undefined}) ->
-    ?LOG(warning, "Destroyed", [], State),
+    ?LOCAL_LOG(warning, "Destroyed", [], State),
     shutdown(destroy, State);
 
 handle_cast({destroy, ClientId},
             State = #state{client_id = ClientId, client_pid = OldClientPid}) ->
-    ?LOG(warning, "kickout ~p", [OldClientPid], State),
+    ?LOCAL_LOG(warning, "kickout ~p", [OldClientPid], State),
     shutdown(conflict, State);
 
 handle_cast(Msg, State) ->
@@ -547,7 +547,7 @@ handle_info({timeout, _Timer, check_awaiting_rel}, State) ->
     hibernate(expire_awaiting_rel(emit_stats(State#state{await_rel_timer = undefined})));
 
 handle_info({timeout, _Timer, expired}, State) ->
-    ?LOG(info, "Expired, shutdown now.", [], State),
+    ?LOCAL_LOG(info, "Expired, shutdown now.", [], State),
     shutdown(expired, State);
 
 handle_info({'EXIT', ClientPid, _Reason},
@@ -558,7 +558,7 @@ handle_info({'EXIT', ClientPid, Reason},
             State = #state{clean_sess      = false,
                            client_pid      = ClientPid,
                            expiry_interval = Interval}) ->
-    ?LOG(info, "Client ~p EXIT for ~p", [ClientPid, Reason], State),
+    ?LOCAL_LOG(info, "Client ~p EXIT for ~p", [ClientPid, Reason], State),
     ExpireTimer = start_timer(Interval, expired),
     State1 = State#state{client_pid = undefined, expiry_timer = ExpireTimer},
     hibernate(emit_stats(State1));
@@ -569,7 +569,7 @@ handle_info({'EXIT', Pid, _Reason}, State = #state{old_client_pid = Pid}) ->
 
 handle_info({'EXIT', Pid, Reason}, State = #state{client_pid = ClientPid}) ->
 
-    ?LOG(error, "Unexpected EXIT: client_pid=~p, exit_pid=~p, reason=~p",
+    ?LOCAL_LOG(error, "Unexpected EXIT: client_pid=~p, exit_pid=~p, reason=~p",
          [ClientPid, Pid, Reason], State),
     hibernate(State);
 
@@ -743,7 +743,7 @@ acked(puback, PacketId, State = #state{client_id = ClientId,
             emqttd_hooks:run('message.acked', [ClientId, Username], Msg),
             State#state{inflight = I:delete(PacketId, Inflight)};
         _ ->
-            ?LOG(warning, "Duplicated PUBACK Packet: ~p", [PacketId], State),
+            ?LOCAL_LOG(warning, "Duplicated PUBACK Packet: ~p", [PacketId], State),
             State
     end;
 
@@ -756,7 +756,7 @@ acked(pubrec, PacketId, State = #state{client_id = ClientId,
             emqttd_hooks:run('message.acked', [ClientId, Username], Msg),
             State#state{inflight = I:update(PacketId, {pubrel, PacketId, os:timestamp()}, Inflight)}; 
         {pubrel, PacketId, _Ts} ->
-            ?LOG(warning, "Duplicated PUBREC Packet: ~p", [PacketId], State),
+            ?LOCAL_LOG(warning, "Duplicated PUBREC Packet: ~p", [PacketId], State),
             State
     end;
 

@@ -15,7 +15,6 @@
 %%--------------------------------------------------------------------
 
 -module(emqttd_ctl).
--compile({parse_transform, lager_transform}).
 
 -behaviour(gen_server).
 
@@ -24,6 +23,7 @@
 -include("emqttd.hrl").
 
 -include("emqttd_cli.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -define(SERVER, ?MODULE).
 
@@ -105,7 +105,7 @@ handle_cast({register_cmd, Cmd, MF, Opts}, State = #state{seq = Seq}) ->
         [] ->
             ets:insert(?CMD_TAB, {{Seq, Cmd}, MF, Opts});
         [[OriginSeq] | _] ->
-            lager:warning("CLI: ~s is overidden by ~p", [Cmd, MF]),
+            ?LOG_WARNING("CLI: ~s is overidden by ~p", [Cmd, MF]),
             ets:insert(?CMD_TAB, {{OriginSeq, Cmd}, MF, Opts})
     end,
     noreply(next_seq(State));

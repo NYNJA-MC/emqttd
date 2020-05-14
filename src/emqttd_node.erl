@@ -15,7 +15,6 @@
 %%--------------------------------------------------------------------
 
 -module(emqttd_node).
--compile({parse_transform, lager_transform}).
 
 -author("Feng Lee <feng@emqtt.io>").
 

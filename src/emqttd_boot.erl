@@ -18,12 +18,16 @@
 
 -author("Feng Lee <feng@emqtt.io>").
 
+-include_lib("kernel/include/logger.hrl").
+
 -export([apply_module_attributes/1, all_module_attributes/1]).
 
 %% only {F, Args}...
 apply_module_attributes(Name) ->
+    Attributes = all_module_attributes(Name),
+    ?LOG_INFO("Applying module attributes: ~p", [Attributes]),
     [{Module, [apply(Module, F, Args) || {F, Args} <- Attrs]} || 
-        {_App, Module, Attrs} <- all_module_attributes(Name)].
+        {_App, Module, Attrs} <- Attributes].
 
 %% Copy from rabbit_misc.erl
 all_module_attributes(Name) ->

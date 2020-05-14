@@ -15,13 +15,13 @@
 %%--------------------------------------------------------------------
 
 -module(emqttd_access_control).
--compile({parse_transform, lager_transform}).
 
 -behaviour(gen_server).
 
 -author("Feng Lee <feng@emqtt.io>").
 
 -include("emqttd.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 %% API Function Exports
 -export([start_link/0, auth/2, check_acl/3, reload_acl/0, lookup_mods/1,
@@ -80,7 +80,7 @@ check_acl(Client, PubSub, Topic) when ?PS(PubSub) ->
         AclMods -> check_acl(Client, PubSub, Topic, AclMods)
     end.
 check_acl(#mqtt_client{client_id = ClientId}, PubSub, Topic, []) ->
-    lager:error("ACL: nomatch for ~s ~s ~s", [ClientId, PubSub, Topic]),
+    ?LOG_ERROR("ACL: nomatch for ~s ~s ~s", [ClientId, PubSub, Topic]),
     allow;
 check_acl(Client, PubSub, Topic, [{Mod, State, _Seq}|AclMods]) ->
     case Mod:check_acl({Client, PubSub, Topic}, State) of
@@ -162,7 +162,7 @@ handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 
 handle_call(Req, _From, State) ->
-    lager:error("Bad Request: ~p", [Req]),
+    ?LOG_ERROR("Bad Request: ~p", [Req]),
     {reply, {error, badreq}, State}.
 
 handle_cast(_Msg, State) ->

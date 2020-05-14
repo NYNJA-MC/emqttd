@@ -16,7 +16,6 @@
 
 %% @doc Session Helper.
 -module(emqttd_sm_helper).
--compile({parse_transform, lager_transform}).
 
 -author("Feng Lee <feng@emqtt.io>").
 
@@ -27,6 +26,7 @@
 -include("emqttd_internal.hrl").
 
 -include_lib("stdlib/include/ms_transform.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 %% API Function Exports
 -export([start_link/1]).
@@ -54,7 +54,7 @@ handle_cast(Msg, State) ->
     ?UNEXPECTED_MSG(Msg, State).
 
 handle_info({mnesia_system_event, {mnesia_down, Node}}, State) ->
-    lager:error("!!!Mnesia node down: ~s", [Node]),
+    ?LOG_ERROR("!!!Mnesia node down: ~s", [Node]),
     Fun = fun() ->
             ClientIds =
             mnesia:select(mqtt_session, [{#mqtt_session{client_id = '$1', sess_pid = '$2', _ = '_'},

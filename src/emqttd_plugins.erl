@@ -15,11 +15,11 @@
 %%--------------------------------------------------------------------
 
 -module(emqttd_plugins).
--compile({parse_transform, lager_transform}).
 
 -author("Feng Lee <feng@emqtt.io>").
 
 -include("emqttd.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -export([init/0]).
 
@@ -67,7 +67,7 @@ with_loaded_file(File, SuccFun) ->
         {ok, Names} ->
             SuccFun(Names);
         {error, Error} ->
-            lager:error("Failed to read: ~p, error: ~p", [File, Error]),
+            ?LOG_ERROR("Failed to read: ~p, error: ~p", [File, Error]),
             {error, Error}
     end.
 
@@ -75,7 +75,7 @@ load_plugins(Names, Persistent) ->
     Plugins = list(), NotFound = Names -- names(Plugins),
     case NotFound of
         []       -> ok;
-        NotFound -> lager:error("Cannot find plugins: ~p", [NotFound])
+        NotFound -> ?LOG_ERROR("Cannot find plugins: ~p", [NotFound])
     end,
     NeedToLoad = Names -- NotFound -- names(started_app),
     [load_plugin(find_plugin(Name, Plugins), Persistent) || Name <- NeedToLoad].
@@ -126,12 +126,12 @@ plugin(CfgFile) ->
 load(PluginName) when is_atom(PluginName) ->
     case lists:member(PluginName, names(started_app)) of
         true ->
-            lager:error("Plugin ~p is already started", [PluginName]),
+            ?LOG_ERROR("Plugin ~p is already started", [PluginName]),
             {error, already_started};
         false ->
             case find_plugin(PluginName) of
                 false ->
-                    lager:error("Plugin ~s not found", [PluginName]),
+                    ?LOG_ERROR("Plugin ~s not found", [PluginName]),
                     {error, not_found};
                 Plugin ->
                     load_plugin(Plugin, true)
@@ -159,12 +159,12 @@ load_app(App) ->
 start_app(App, SuccFun) ->
     case application:ensure_all_started(App) of
         {ok, Started} ->
-            lager:info("started Apps: ~p", [Started]),
-            lager:info("load plugin ~p successfully", [App]),
+            ?LOG_INFO("started Apps: ~p", [Started]),
+            ?LOG_INFO("load plugin ~p successfully", [App]),
             SuccFun(App),
             {ok, Started};
         {error, {ErrApp, Reason}} ->
-            lager:error("load plugin ~p error, cannot start app ~s for ~p", [App, ErrApp, Reason]),
+            ?LOG_ERROR("load plugin ~p error, cannot start app ~s for ~p", [App, ErrApp, Reason]),
             {error, {ErrApp, Reason}}
     end.
 
@@ -181,10 +181,10 @@ unload(PluginName) when is_atom(PluginName) ->
         {true, true} ->
             unload_plugin(PluginName, true);
         {false, _} ->
-            lager:error("Plugin ~p is not started", [PluginName]),
+            ?LOG_ERROR("Plugin ~p is not started", [PluginName]),
             {error, not_started};
         {true, false} ->
-            lager:error("~s is not a plugin, cannot unload it", [PluginName]),
+            ?LOG_ERROR("~s is not a plugin, cannot unload it", [PluginName]),
             {error, not_found}
     end.
 
@@ -199,11 +199,11 @@ unload_plugin(App, Persistent) ->
 stop_app(App) ->
     case application:stop(App) of
         ok ->
-            lager:info("stop plugin ~p successfully~n", [App]), ok;
+            ?LOG_INFO("stop plugin ~p successfully~n", [App]), ok;
         {error, {not_started, App}} ->
-            lager:error("plugin ~p is not started~n", [App]), ok;
+            ?LOG_ERROR("plugin ~p is not started~n", [App]), ok;
         {error, Reason} ->
-            lager:error("stop plugin ~p error: ~p", [App]), {error, Reason}
+            ?LOG_ERROR("stop plugin ~p error: ~p", [App]), {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
@@ -235,7 +235,7 @@ plugin_loaded(Name, true) ->
                     ignore
             end;
         {error, Error} ->
-            lager:error("Cannot read loaded plugins: ~p", [Error])
+            ?LOG_ERROR("Cannot read loaded plugins: ~p", [Error])
     end.
 
 plugin_unloaded(_Name, false) ->
@@ -247,10 +247,10 @@ plugin_unloaded(Name, true) ->
                 true ->
                     write_loaded(lists:delete(Name, Names));
                 false ->
-                    lager:error("Cannot find ~s in loaded_file", [Name])
+                    ?LOG_ERROR("Cannot find ~s in loaded_file", [Name])
             end;
         {error, Error} ->
-            lager:error("Cannot read loaded_plugins: ~p", [Error])
+            ?LOG_ERROR("Cannot read loaded_plugins: ~p", [Error])
     end.
 
 read_loaded() ->
@@ -269,7 +269,7 @@ write_loaded(AppNames) ->
                 file:write(Fd, iolist_to_binary(io_lib:format("~s.~n", [Name])))
             end, AppNames);
         {error, Error} ->
-            lager:error("Open File ~p Error: ~p", [File, Error]),
+            ?LOG_ERROR("Open File ~p Error: ~p", [File, Error]),
             {error, Error}
     end.
 

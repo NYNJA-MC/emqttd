@@ -17,13 +17,14 @@
 %% @doc HTTP publish API and websocket client.
 
 -module(emqttd_http).
--compile({parse_transform, lager_transform}).
 
 -author("Feng Lee <feng@emqtt.io>").
 
 -include("emqttd.hrl").
 
 -include("emqttd_protocol.hrl").
+
+-include_lib("kernel/include/logger.hrl").
 
 -import(proplists, [get_value/2, get_value/3]).
 
@@ -59,17 +60,17 @@ handle_request('POST', "/mqtt/publish", {R,_} = Req) ->
 %%--------------------------------------------------------------------
 
 handle_request('GET', "/mqtt", {R,_} = Req) ->
-    lager:info("WebSocket Connection from: ~s", [R:get(peer, Req)]),
+    ?LOG_INFO("WebSocket Connection from: ~s", [R:get(peer, Req)]),
     Upgrade = R:get_header_value("Upgrade", Req),
     Proto   = R:get_header_value("Sec-WebSocket-Protocol", Req),
     case {is_websocket(Upgrade), Proto} of
         {true, "mqtt" ++ _Vsn} ->
             emqttd_ws:handle_request(Req);
         {false, _} ->
-            lager:error("Not WebSocket: Upgrade = ~s", [Upgrade]),
+            ?LOG_ERROR("Not WebSocket: Upgrade = ~s", [Upgrade]),
             R:respond({400, [], <<"Bad Request">>}, Req);
         {_, Proto} ->
-            lager:error("WebSocket with error Protocol: ~s", [Proto]),
+            ?LOG_ERROR("WebSocket with error Protocol: ~s", [Proto]),
             R:respond({400, [], <<"Bad WebSocket Protocol">>}, Req)
     end;
 
@@ -78,11 +79,11 @@ handle_request('GET', "/mqtt", {R,_} = Req) ->
 %%--------------------------------------------------------------------
 
 handle_request('GET', "/" ++ File, Req) ->
-    lager:info("HTTP GET File: ~s", [File]),
+    ?LOG_INFO("HTTP GET File: ~s", [File]),
     mochiweb_request:serve_file(File, docroot(), Req);
 
 handle_request(Method, Path, {R,_} = Req) ->
-    lager:error("Unexpected HTTP Request: ~s ~s", [Method, Path]),
+    ?LOG_ERROR("Unexpected HTTP Request: ~s ~s", [Method, Path]),
     R:not_found(Req).
 
 %%--------------------------------------------------------------------
@@ -91,7 +92,7 @@ handle_request(Method, Path, {R,_} = Req) ->
 
 http_publish({R,_} = Req) ->
     Params = mochiweb_request:parse_post(Req),
-    lager:info("HTTP Publish: ~p", [Params]),
+    ?LOG_INFO("HTTP Publish: ~p", [Params]),
     Topics   = topics(Params),
     ClientId = get_value("client", Params, http),
     Qos      = int(get_value("qos", Params, "0")),
@@ -145,7 +146,7 @@ authorized({R,_} = Req) ->
             {ok, _IsSuper} -> 
                 true;
             {error, Reason} ->
-                lager:error("HTTP Auth failure: username=~s, reason=~p", [Username, Reason]),
+                ?LOG_ERROR("HTTP Auth failure: username=~s, reason=~p", [Username, Reason]),
                 false
         end
     end.

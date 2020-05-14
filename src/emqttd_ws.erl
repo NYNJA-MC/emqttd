@@ -15,11 +15,11 @@
 %%--------------------------------------------------------------------
 
 -module(emqttd_ws).
--compile({parse_transform, lager_transform}).
 
 -author("Feng Lee <feng@emqtt.io>").
 
 -include("emqttd_protocol.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -import(proplists, [get_value/3]).
 
@@ -29,8 +29,8 @@
 -record(wsocket_state, {peername, client_pid, max_packet_size, parser}).
 
 -define(WSLOG(Level, Format, Args, State),
-              lager:Level("WsClient(~s): " ++ Format,
-                          [esockd_net:format(State#wsocket_state.peername) | Args])).
+              ?LOG(Level, "WsClient(~s): " ++ Format,
+                   [esockd_net:format(State#wsocket_state.peername) | Args])).
 
 %%--------------------------------------------------------------------
 %% Handle WebSocket Request
