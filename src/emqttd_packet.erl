@@ -67,7 +67,8 @@ format_variable(undefined, _) ->
 format_variable(Variable, undefined) ->
     format_variable(Variable);
 format_variable(Variable, Payload) ->
-    io_lib:format("~s, Payload=~W", [format_variable(Variable), Payload, 256]).
+    Hash = erlang:phash2(Payload),
+    io_lib:format("~s, Hash=0x~8.16.0b", [format_variable(Variable), Hash]).
 
 format_variable(#mqtt_packet_connect{
                  proto_ver     = ProtoVer,

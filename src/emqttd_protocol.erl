@@ -111,7 +111,7 @@ session(#proto_state{session = Session}) ->
 
 %% CONNECT – Client requests a connection to a Server
 
-%% A Client can only send the CONNECT Packet once over a Network Connection. 
+%% A Client can only send the CONNECT Packet once over a Network Connection.
 -spec(received(mqtt_packet(), proto_state()) -> {ok, proto_state()} | {error, any()}).
 received(Packet = ?PACKET(?CONNECT),
          State = #proto_state{connected = false, stats_data = Stats}) ->
@@ -327,6 +327,9 @@ send(Packet = ?PACKET(Type),
     Stats1 = inc_stats(send, Type, Stats),
     {ok, State#proto_state{stats_data = Stats1}}.
 
+trace(_, ?PACKET(Type), _) when Type /= ?PUBLISH, Type /= ?CONNECT, Type /= ?DISCONNECT ->
+    skip;
+
 trace(recv, Packet, ProtoState) ->
     ?LOCAL_LOG(info, "RECV ~s", [emqttd_packet:format(Packet)], ProtoState);
 
@@ -403,14 +406,14 @@ start_keepalive(Sec) when Sec > 0 ->
 
 validate_connect(Connect = #mqtt_packet_connect{}, ProtoState) ->
     case validate_protocol(Connect) of
-        true -> 
+        true ->
             case validate_clientid(Connect, ProtoState) of
-                true -> 
+                true ->
                     ?CONNACK_ACCEPT;
-                false -> 
+                false ->
                     ?CONNACK_INVALID_ID
             end;
-        false -> 
+        false ->
             ?CONNACK_PROTO_VER
     end.
 
@@ -452,7 +455,7 @@ validate_packet(?SUBSCRIBE_PACKET(_PacketId, TopicTable)) ->
 validate_packet(?UNSUBSCRIBE_PACKET(_PacketId, Topics)) ->
     validate_topics(filter, Topics);
 
-validate_packet(_Packet) -> 
+validate_packet(_Packet) ->
     ok.
 
 validate_topics(_Type, []) ->
