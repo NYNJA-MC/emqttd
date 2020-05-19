@@ -15,7 +15,6 @@
 %%--------------------------------------------------------------------
 
 -module(emqttd_sm).
--compile({parse_transform, lager_transform}).
 
 -author("Feng Lee <feng@emqtt.io>").
 
@@ -24,6 +23,8 @@
 -include("emqttd.hrl").
 
 -include("emqttd_internal.hrl").
+
+-include_lib("kernel/include/logger.hrl").
 
 %% Mnesia Callbacks
 -export([mnesia/1]).
@@ -53,8 +54,8 @@
 
 -define(TIMEOUT, 120000).
 
--define(LOG(Level, Format, Args, Session),
-            lager:Level("SM(~s): " ++ Format, [Session#mqtt_session.client_id | Args])).
+-define(LOCAL_LOG(Level, Format, Args, Session),
+            ?LOG(Level, "SM(~s): " ++ Format, [Session#mqtt_session.client_id | Args])).
 
 %%--------------------------------------------------------------------
 %% Mnesia callbacks
@@ -187,7 +188,7 @@ handle_info({'DOWN', MRef, process, DownPid, _Reason}, State) ->
                 end),
             {noreply, erase_monitor(MRef, State), hibernate};
         error ->
-            lager:error("MRef of session ~p not found", [DownPid]),
+            logger:error("MRef of session ~p not found", [DownPid]),
             {noreply, State}
     end;
 
@@ -221,7 +222,7 @@ create_session(CleanSess, {ClientId, Username}, ClientPid) ->
             case insert_session(Session) of
                 {aborted, {conflict, ConflictPid}} ->
                     %% Conflict with othe node?
-                    lager:error("SM(~s): Conflict with ~p", [ClientId, ConflictPid]),
+                    logger:error("SM(~s): Conflict with ~p", [ClientId, ConflictPid]),
                     {error, mnesia_conflict};
                 {atomic, ok} ->
                     {ok, SessPid}
@@ -250,7 +251,7 @@ resume_session(Session = #mqtt_session{client_id = ClientId, sess_pid = SessPid}
             emqttd_session:resume(SessPid, ClientId, ClientPid),
             {ok, SessPid};
         false ->
-            ?LOG(error, "Cannot resume ~p which seems already dead!", [SessPid], Session),
+            ?LOCAL_LOG(error, "Cannot resume ~p which seems already dead!", [SessPid], Session),
             {error, session_died}
     end;
 
@@ -261,11 +262,11 @@ resume_session(Session = #mqtt_session{client_id = ClientId, sess_pid = SessPid}
         ok ->
             {ok, SessPid};
         {badrpc, nodedown} ->
-            ?LOG(error, "Session died for node '~s' down", [Node], Session),
+            ?LOCAL_LOG(error, "Session died for node '~s' down", [Node], Session),
             remove_session(Session),
             {error, session_nodedown};
         {badrpc, Reason} ->
-            ?LOG(error, "Failed to resume from node ~s for ~p", [Node, Reason], Session),
+            ?LOCAL_LOG(error, "Failed to resume from node ~s for ~p", [Node, Reason], Session),
             {error, Reason}
     end.
 
@@ -283,10 +284,10 @@ destroy_session(Session = #mqtt_session{client_id = ClientId,
         ok ->
             remove_session(Session);
         {badrpc, nodedown} ->
-            ?LOG(error, "Node '~s' down", [Node], Session),
+            ?LOCAL_LOG(error, "Node '~s' down", [Node], Session),
             remove_session(Session); 
         {badrpc, Reason} ->
-            ?LOG(error, "Failed to destory ~p on remote node ~p for ~s",
+            ?LOCAL_LOG(error, "Failed to destory ~p on remote node ~p for ~s",
                  [SessPid, Node, Reason], Session),
             {error, Reason}
      end.

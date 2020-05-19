@@ -17,7 +17,6 @@
 %% @doc MQTT/TCP Connection.
 
 -module(emqttd_client).
--compile({parse_transform, lager_transform}).
 
 -behaviour(gen_server2).
 
@@ -28,6 +27,8 @@
 -include("emqttd_protocol.hrl").
 
 -include("emqttd_internal.hrl").
+
+-include_lib("kernel/include/logger.hrl").
 
 -import(proplists, [get_value/2, get_value/3]).
 
@@ -62,9 +63,9 @@
 
 -define(SOCK_STATS, [recv_oct, recv_cnt, send_oct, send_cnt, send_pend]).
 
--define(LOG(Level, Format, Args, State),
-            lager:Level("Client(~s): " ++ Format,
-                        [esockd_net:format(State#client_state.peername) | Args])).
+-define(LOCAL_LOG(Level, Format, Args, State),
+            ?LOG(Level, "Client(~s): " ++ Format,
+                 [esockd_net:format(State#client_state.peername) | Args])).
 
 start_link(Conn, Env) ->
     {ok, proc_lib:spawn_opt(?MODULE, init, [[Conn, Env]], [link | ?FULLSWEEP_OPTS])}.
@@ -135,7 +136,7 @@ send_fun({C,_} = Conn, Peername) ->
     Self = self(),
     fun(Packet) ->
         Data = emqttd_serializer:serialize(Packet),
-        ?LOG(debug, "SEND2 ~p", [Data], #client_state{peername = Peername}),
+        ?LOCAL_LOG(debug, "SEND2 ~p", [Data], #client_state{peername = Peername}),
         emqttd_metrics:inc('bytes/sent', iolist_size(Data)),
         try C:async_send(Data,Conn) of
             true -> ok
@@ -225,7 +226,7 @@ handle_info({shutdown, Error}, State) ->
     shutdown(Error, State);
 
 handle_info({shutdown, conflict, {ClientId, NewPid}}, State) ->
-    ?LOG(warning, "clientid '~s' conflict with ~p", [ClientId, NewPid], State),
+    ?LOCAL_LOG(warning, "clientid '~s' conflict with ~p", [ClientId, NewPid], State),
     shutdown(conflict, State);
 
 handle_info(activate_sock, State) ->
@@ -233,7 +234,7 @@ handle_info(activate_sock, State) ->
 
 handle_info({inet_async, _Sock, _Ref, {ok, Data}}, State) ->
     Size = iolist_size(Data),
-    ?LOG(debug, "RECV ~p", [Data], State),
+    ?LOCAL_LOG(debug, "RECV ~p", [Data], State),
     emqttd_metrics:inc('bytes/received', Size),
     received(Data, rate_limit(Size, State#client_state{await_recv = false}));
 
@@ -247,7 +248,7 @@ handle_info({inet_reply, _Sock, {error, Reason}}, State) ->
     shutdown(Reason, State);
 
 handle_info({keepalive, start, Interval}, State = #client_state{connection = Conn}) ->
-    ?LOG(debug, "Keepalive at the interval of ~p", [Interval], State),
+    ?LOCAL_LOG(debug, "Keepalive at the interval of ~p", [Interval], State),
     StatFun = fun() ->
                 {C,_} = Conn,
                 case C:getstat([recv_oct],Conn) of
@@ -259,7 +260,7 @@ handle_info({keepalive, start, Interval}, State = #client_state{connection = Con
         {ok, KeepAlive} ->
             {noreply, State#client_state{keepalive = KeepAlive}, hibernate};
         {error, Error} ->
-            ?LOG(warning, "Keepalive error - ~p", [Error], State),
+            ?LOCAL_LOG(warning, "Keepalive error - ~p", [Error], State),
             shutdown(Error, State)
     end;
 
@@ -268,10 +269,10 @@ handle_info({keepalive, check}, State = #client_state{keepalive = KeepAlive}) ->
         {ok, KeepAlive1} ->
             {noreply, State#client_state{keepalive = KeepAlive1}, hibernate};
         {error, timeout} ->
-            ?LOG(debug, "Keepalive timeout", [], State),
+            ?LOCAL_LOG(debug, "Keepalive timeout", [], State),
             shutdown(keepalive_timeout, State);
         {error, Error} ->
-            ?LOG(warning, "Keepalive error - ~p", [Error], State),
+            ?LOCAL_LOG(warning, "Keepalive error - ~p", [Error], State),
             shutdown(Error, State)
     end;
 
@@ -316,7 +317,7 @@ received(Bytes, State = #client_state{parser      = Parser,
                     received(Rest, State#client_state{parser = emqttd_parser:initial_state(PacketSize),
                                                       proto_state = ProtoState1});
                 {error, Error} ->
-                    ?LOG(error, "Protocol error - ~p", [Error], State),
+                    ?LOCAL_LOG(error, "Protocol error - ~p", [Error], State),
                     shutdown(Error, State);
                 {error, Error, ProtoState1} ->
                     shutdown(Error, State#client_state{proto_state = ProtoState1});
@@ -324,11 +325,11 @@ received(Bytes, State = #client_state{parser      = Parser,
                     stop(Reason, State#client_state{proto_state = ProtoState1})
             end;
         {error, Error} ->
-            ?LOG(error, "Framing error - ~p", [Error], State),
+            ?LOCAL_LOG(error, "Framing error - ~p", [Error], State),
             shutdown(Error, State);
         {'EXIT', Reason} ->
-            ?LOG(error, "Parser failed for ~p", [Reason], State),
-            ?LOG(error, "Error data: ~p", [Bytes], State),
+            ?LOCAL_LOG(error, "Parser failed for ~p", [Reason], State),
+            ?LOCAL_LOG(error, "Error data: ~p", [Bytes], State),
             shutdown(parser_error, State)
     end.
 
@@ -339,7 +340,7 @@ rate_limit(Size, State = #client_state{rate_limit = Rl}) ->
         {0, Rl1} ->
             run_socket(State#client_state{conn_state = running, rate_limit = Rl1});
         {Pause, Rl1} ->
-            ?LOG(warning, "Rate limiter pause for ~p", [Pause], State),
+            ?LOCAL_LOG(warning, "Rate limiter pause for ~p", [Pause], State),
             erlang:send_after(Pause, self(), activate_sock),
             State#client_state{conn_state = blocked, rate_limit = Rl1}
     end.

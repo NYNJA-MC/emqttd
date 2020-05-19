@@ -16,13 +16,13 @@
 
 %% @docTrace MQTT packets/messages by ClientID or Topic.
 -module(emqttd_trace).
--compile({parse_transform, lager_transform}).
 
 -behaviour(gen_server).
 
 -author("Feng Lee <feng@emqtt.io>").
 
 -include("emqttd_internal.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 %% API Function Exports
 -export([start_link/0]).
@@ -90,7 +90,7 @@ handle_call({stop_trace, Who}, _From, State = #state{traces = Traces}) ->
         {ok, {Trace, _LogFile}} ->
             case lager:stop_trace(Trace) of
                 ok -> ok;
-                {error, Error} -> lager:error("Stop trace ~p error: ~p", [Who, Error])
+                {error, Error} -> ?LOG_ERROR("Stop trace ~p error: ~p", [Who, Error])
             end,
             {reply, ok, State#state{traces = maps:remove(Who, Traces)}};
         error ->

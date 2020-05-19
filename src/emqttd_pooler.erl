@@ -15,16 +15,17 @@
 %%--------------------------------------------------------------------
 
 -module(emqttd_pooler).
--compile({parse_transform, lager_transform}).
 
 -behaviour(gen_server).
 
 -include("emqttd_internal.hrl").
 
+-include_lib("kernel/include/logger.hrl").
+
 %% Start the pool supervisor
 -export([start_link/0]).
 
-%% API Exports 
+%% API Exports
 -export([start_link/2, submit/1, async_submit/1]).
 
 %% gen_server Function Exports
@@ -72,7 +73,7 @@ handle_call(_Req, _From, State) ->
 handle_cast({async_submit, Fun}, State) ->
     try run(Fun)
     catch _:Error ->
-        lager:error("Pooler Error: ~p, ~p", [Error, erlang:get_stacktrace()])
+        ?LOG_ERROR("Pooler Error: ~p, ~p", [Error, erlang:get_stacktrace()])
     end,
     {noreply, State};
 

@@ -16,13 +16,13 @@
 
 %% @doc VM System Monitor
 -module(emqttd_sysmon).
--compile({parse_transform, lager_transform}).
 
 -author("Feng Lee <feng@emqtt.io>").
 
 -behavior(gen_server).
 
 -include("emqttd_internal.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -export([start_link/1]).
 
@@ -31,13 +31,11 @@
 
 -record(state, {tickref, events = [], tracelog}).
 
--define(LOG_FMT, [{formatter_config, [time, " ", message, "\n"]}]).
+-define(LOCAL_LOG(Msg, ProcInfo),
+        ?LOG_WARNING("~s~n~p", [WarnMsg, ProcInfo])).
 
--define(LOG(Msg, ProcInfo),
-        lager:warning([{sysmon, true}], "~s~n~p", [WarnMsg, ProcInfo])).
-
--define(LOG(Msg, ProcInfo, PortInfo),
-        lager:warning([{sysmon, true}], "~s~n~p~n~p", [WarnMsg, ProcInfo, PortInfo])).
+-define(LOCAL_LOG(Msg, ProcInfo, PortInfo),
+        ?LOG_WARNING("~s~n~p~n~p", [WarnMsg, ProcInfo, PortInfo])).
 
 %% @doc Start system monitor
 -spec(start_link(Opts :: list(tuple())) ->
@@ -90,42 +88,42 @@ handle_cast(Msg, State) ->
 handle_info({monitor, Pid, long_gc, Info}, State) ->
     suppress({long_gc, Pid}, fun() ->
             WarnMsg = io_lib:format("long_gc warning: pid = ~p, info: ~p", [Pid, Info]),
-            ?LOG(WarnMsg, procinfo(Pid)),
+            ?LOCAL_LOG(WarnMsg, procinfo(Pid)),
             publish(long_gc, WarnMsg)
         end, State);
 
 handle_info({monitor, Pid, long_schedule, Info}, State) when is_pid(Pid) ->
     suppress({long_schedule, Pid}, fun() ->
             WarnMsg = io_lib:format("long_schedule warning: pid = ~p, info: ~p", [Pid, Info]),
-            ?LOG(WarnMsg, procinfo(Pid)),
+            ?LOCAL_LOG(WarnMsg, procinfo(Pid)),
             publish(long_schedule, WarnMsg)
         end, State);
 
 handle_info({monitor, Port, long_schedule, Info}, State) when is_port(Port) ->
     suppress({long_schedule, Port}, fun() ->
         WarnMsg  = io_lib:format("long_schedule warning: port = ~p, info: ~p", [Port, Info]),
-        ?LOG(WarnMsg, erlang:port_info(Port)),
+        ?LOCAL_LOG(WarnMsg, erlang:port_info(Port)),
         publish(long_schedule, WarnMsg)
     end, State);
 
 handle_info({monitor, Pid, large_heap, Info}, State) ->
     suppress({large_heap, Pid}, fun() ->
         WarnMsg = io_lib:format("large_heap warning: pid = ~p, info: ~p", [Pid, Info]),
-        ?LOG(WarnMsg, procinfo(Pid)),
+        ?LOCAL_LOG(WarnMsg, procinfo(Pid)),
         publish(large_heap, WarnMsg)
     end, State);
 
 handle_info({monitor, SusPid, busy_port, Port}, State) ->
     suppress({busy_port, Port}, fun() ->
         WarnMsg = io_lib:format("busy_port warning: suspid = ~p, port = ~p", [SusPid, Port]),
-        ?LOG(WarnMsg, procinfo(SusPid), erlang:port_info(Port)),
+        ?LOCAL_LOG(WarnMsg, procinfo(SusPid), erlang:port_info(Port)),
         publish(busy_port, WarnMsg)
     end, State);
 
 handle_info({monitor, SusPid, busy_dist_port, Port}, State) ->
     suppress({busy_dist_port, Port}, fun() ->
         WarnMsg = io_lib:format("busy_dist_port warning: suspid = ~p, port = ~p", [SusPid, Port]),
-        ?LOG(WarnMsg, procinfo(SusPid), erlang:port_info(Port)),
+        ?LOCAL_LOG(WarnMsg, procinfo(SusPid), erlang:port_info(Port)),
         publish(busy_dist_port, WarnMsg)
     end, State);
 
@@ -135,9 +133,9 @@ handle_info(reset, State) ->
 handle_info(Info, State) ->
     ?UNEXPECTED_INFO(Info, State).
 
-terminate(_Reason, #state{tickref = TRef, tracelog = TraceLog}) ->
+terminate(_Reason, #state{tickref = TRef}) ->
     timer:cancel(TRef),
-    cancel_tracelog(TraceLog).
+    ok.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -164,14 +162,3 @@ publish(Sysmon, WarnMsg) ->
 
 topic(Sysmon) ->
     emqttd_topic:systop(list_to_binary(lists:concat(['sysmon/', Sysmon]))).
-
-%% start_tracelog(undefined) ->
-%%    {ok, undefined};
-%% start_tracelog(LogFile) ->
-%%    lager:trace_file(LogFile, [{sysmon, true}], info, ?LOG_FMT).
-
-cancel_tracelog(undefined) ->
-    ok;
-cancel_tracelog(TraceLog) ->
-    lager:stop_trace(TraceLog).
-

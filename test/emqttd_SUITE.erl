@@ -115,7 +115,6 @@ groups() ->
        ]}].
 
 init_per_suite(Config) ->
-    application:start(lager),
     application:set_env(kvs,dba,store_mnesia),
     application:set_env(kvs,schema,[kvs_feed, emqttd_kvs]),
     application:start(mnesia),

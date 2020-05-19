@@ -17,7 +17,6 @@
 %% @doc MQTT WebSocket Connection.
 
 -module(emqttd_ws_client).
--compile({parse_transform, lager_transform}).
 
 -behaviour(gen_server2).
 
@@ -28,6 +27,8 @@
 -include("emqttd_protocol.hrl").
 
 -include("emqttd_internal.hrl").
+
+-include_lib("kernel/include/logger.hrl").
 
 -import(proplists, [get_value/3]).
 
@@ -57,8 +58,8 @@
 -define(SOCK_STATS, [recv_oct, recv_cnt, send_oct, send_cnt, send_pend]).
 
 -define(WSLOG(Level, Format, Args, State),
-              lager:Level("WsClient(~s): " ++ Format,
-                          [esockd_net:format(State#wsclient_state.peername) | Args])).
+              ?LOG(Level, "WsClient(~s): " ++ Format,
+                   [esockd_net:format(State#wsclient_state.peername) | Args])).
 
 %% @doc Start WebSocket Client.
 start_link(Env, WsPid, Req, ReplyChannel) ->

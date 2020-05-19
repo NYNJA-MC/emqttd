@@ -17,6 +17,7 @@
 -module(emqttd_net).
 
 -include_lib("kernel/include/inet.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -export([tcp_name/3, tcp_host/1, getopts/2, setopts/2, getaddr/2,
          port_to_listeners/1]).
@@ -52,7 +53,7 @@ gethostaddr(Host, Family) ->
     end.
 
 host_lookup_error(Host, Reason) ->
-    error_logger:error_msg("invalid host ~p - ~p~n", [Host, Reason]),
+    ?LOG_ERROR("invalid host ~p - ~p~n", [Host, Reason]),
     throw({error, {invalid_host, Host, Reason}}).
 
 resolve_family({_,_,_,_},         auto) -> inet;

@@ -38,7 +38,6 @@
 %%--------------------------------------------------------------------
 
 start(_Type, _Args) ->
-    lager:set_loglevel(lager_console_backend, error),
     print_banner(),
     kvs:join(),
     emqttd_mnesia:start(),

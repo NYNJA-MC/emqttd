@@ -16,7 +16,6 @@
 
 %% @doc MQTT Packet Parser
 -module(emqttd_parser).
--compile({parse_transform, lager_transform}).
 
 -author("Feng Lee <feng@emqtt.io>").
 

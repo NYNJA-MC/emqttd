@@ -15,7 +15,6 @@
 %%--------------------------------------------------------------------
 
 -module(emqttd_server).
--compile({parse_transform, lager_transform}).
 
 -behaviour(gen_server2).
 
@@ -26,6 +25,8 @@
 -include("emqttd_protocol.hrl").
 
 -include("emqttd_internal.hrl").
+
+-include_lib("kernel/include/logger.hrl").
 
 -export([start_link/3]).
 
@@ -94,7 +95,7 @@ publish(Msg = #mqtt_message{from = From}) ->
         {ok, Msg1 = #mqtt_message{topic = Topic}} ->
             emqttd_pubsub:publish(Topic, Msg1);
         {stop, Msg1} ->
-            lager:warning("Stop publishing: ~s", [emqttd_message:format(Msg1)]),
+            ?LOG_WARNING("Stop publishing: ~s", [emqttd_message:format(Msg1)]),
             ignore
     end.
 
@@ -103,11 +104,11 @@ trace(publish, From, _Msg) when is_atom(From) ->
     %% Dont' trace '$SYS' publish
     ignore;
 trace(publish, {ClientId, Username}, #mqtt_message{topic = Topic, payload = Payload}) ->
-    lager:info([{client, ClientId}, {topic, Topic}],
-               "~s/~s PUBLISH to ~s: ~p", [ClientId, Username, Topic, Payload]);
+    ?LOG_INFO("~s/~s PUBLISH to ~s: ~p", [ClientId, Username, Topic, Payload],
+              #{client => ClientId, topic => Topic});
 trace(publish, From, #mqtt_message{topic = Topic, payload = Payload}) when is_binary(From); is_list(From) ->
-    lager:info([{client, From}, {topic, Topic}],
-               "~s PUBLISH to ~s: ~p", [From, Topic, Payload]).
+    ?LOG_INFO("~s PUBLISH to ~s: ~p", [From, Topic, Payload],
+              #{client => From, topic => Topic}).
 
 %% @doc Unsubscribe
 -spec(unsubscribe(binary()) -> ok | emqttd:pubsub_error()).

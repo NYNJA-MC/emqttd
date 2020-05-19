@@ -17,7 +17,6 @@
 %% @doc MQTT Client Manager
 
 -module(emqttd_cm).
--compile({parse_transform, lager_transform}).
 
 -behaviour(gen_server2).
 
@@ -26,8 +25,9 @@
 -include("emqttd.hrl").
 
 -include("emqttd_internal.hrl").
+-include_lib("kernel/include/logger.hrl").
 
-%% API Exports 
+%% API Exports
 -export([start_link/3]).
 
 -export([lookup/1, lookup_proc/1, reg/1, unreg/1]).
@@ -131,7 +131,7 @@ handle_info({'DOWN', MRef, process, DownPid, _Reason}, State) ->
             end,
             {noreply, setstats(erase_monitor(MRef, State))};
         error ->
-            lager:error("MRef of client ~p not found", [DownPid]),
+            ?LOG_ERROR("MRef of client ~p not found", [DownPid]),
             {noreply, State}
     end;
 

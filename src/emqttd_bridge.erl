@@ -15,7 +15,6 @@
 %%--------------------------------------------------------------------
 
 -module(emqttd_bridge).
--compile({parse_transform, lager_transform}).
 
 -behaviour(gen_server2).
 
@@ -26,6 +25,8 @@
 -include("emqttd_protocol.hrl").
 
 -include("emqttd_internal.hrl").
+
+-include_lib("kernel/include/logger.hrl").
 
 %% API Function Exports
 -export([start_link/5]).
@@ -120,7 +121,7 @@ handle_info({dispatch, _Topic, Msg}, State = #state{node = Node, status = up}) -
     {noreply, State, hibernate};
 
 handle_info({nodedown, Node}, State = #state{node = Node, ping_down_interval = Interval}) ->
-    lager:warning("Bridge Node Down: ~p", [Node]),
+    ?LOG_WARNING("Bridge Node Down: ~p", [Node]),
     erlang:send_after(Interval, self(), ping_down_node),
     {noreply, State#state{status = down}, hibernate};
 
@@ -128,7 +129,7 @@ handle_info({nodeup, Node}, State = #state{node = Node}) ->
     %% TODO: Really fast??
     case emqttd:is_running(Node) of
         true ->
-            lager:warning("Bridge Node Up: ~p", [Node]),
+            ?LOG_WARNING("Bridge Node Up: ~p", [Node]),
             {noreply, dequeue(State#state{status = up})};
         false ->
             self() ! {nodedown, Node},
