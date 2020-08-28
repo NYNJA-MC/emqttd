@@ -22,7 +22,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/0, pubsub_pool/0, ensure_tab/2]).
+-export([start_link/0, pubsub_pool/0]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -44,9 +44,11 @@ pubsub_pool() ->
 %%--------------------------------------------------------------------
 
 init([]) ->
+    EtsOpts = [{keypos, 2}, named_table, public],
+    ets:new(mqtt_subscriber,   [bag|EtsOpts]),
+    ets:new(mqtt_subscription, [bag|EtsOpts]),
+    ets:new(mqtt_subproperty,  [set|EtsOpts]),
     {ok, Env} = emqttd:env(pubsub),
-    %% Create MNESIA Tables
-    [create_tab(Tab) || Tab <- [mqtt_subproperty, mqtt_subscriber, mqtt_subscription]],
     {ok, { {one_for_all, 10, 3600}, [pool_sup(pubsub, Env), pool_sup(server, Env)]} }.
 
 %%--------------------------------------------------------------------
@@ -62,44 +64,3 @@ pool_sup(Name, Env) ->
     Mod = list_to_atom("emqttd_" ++ atom_to_list(Name)),
     MFA = {Mod, start_link, [Env]},
     emqttd_pool_sup:spec(Pool, [Name, hash, pool_size(Env), MFA]).
-
-%%--------------------------------------------------------------------
-%% Create PubSub Tables
-%%--------------------------------------------------------------------
-
-create_tab(mqtt_subproperty) ->
-%    ok = emqttd_mnesia:create_table(mqtt_subproperty, [
-%                {disc_copies, [node()]},
-%                {record_name, mqtt_subproperty},
-%                {keypos, 2},
-%                {attributes, [key,value]}]);
-    %% Subproperty: {Topic, Sub} -> [{qos, 1}]
-%    ensure_tab(mqtt_subproperty, [public, named_table, set | ?CONCURRENCY_OPTS]);
-    ok;
-
-create_tab(mqtt_subscriber) ->
-%    ok = emqttd_mnesia:create_table(mqtt_subscriber, [
-%                {disc_copies, [node()]},
-%                {record_name, mqtt_subscriber},
-%                {keypos, 2},
-%                {attributes, [key,value]}]);
-    %% Subscriber: Topic -> Sub1, Sub2, Sub3, ..., SubN
-    %% duplicate_bag: o(1) insert
-%    ensure_tab(mqtt_subscriber, [public, named_table, bag | ?CONCURRENCY_OPTS]);
-    ok;
-
-create_tab(mqtt_subscription) ->
-%    ok = emqttd_mnesia:create_table(mqtt_subscription, [
-%                {disc_copies, [node()]},
-%                {record_name, mqtt_subscription},
-%                {keypos, 2},
-%                {index, [2,3]},
-%                {attributes, [key,value]}]).
-    %% Subscription: Sub -> Topic1, Topic2, Topic3, ..., TopicN
-    %% bag: o(n) insert
-%    ensure_tab(mqtt_subscription, [public, named_table, bag | ?CONCURRENCY_OPTS]).
-    ok.
-
-ensure_tab(Tab, Opts) ->
-    case ets:info(Tab, name) of undefined -> ets:new(Tab, Opts); _ -> ok end.
-

@@ -183,8 +183,7 @@ handle_call({setqos, Topic, Subscriber, Qos}, _From, State) ->
     case ets:lookup(mqtt_subproperty, Key) of
         [{mqtt_subproperty, _, Opts}] ->
             Opts1 = lists:ukeymerge(1, [{qos, Qos}], Opts),
-%            ets:insert(mqtt_subproperty, {Key, Opts1}),
-            kvs:put({mqtt_subproperty, Key, Opts1}),
+            ets:insert(mqtt_subproperty, #mqtt_subproperty{key = Key, value = Opts1}),
             {reply, ok, State};
         [] ->
             {reply, {error, {subscription_not_found, Topic}}, State}
@@ -232,22 +231,11 @@ code_change(_OldVsn, State, _Extra) ->
 do_subscribe_(Topic, Subscriber, Options, State) ->
     case ets:lookup(mqtt_subproperty, {Topic, Subscriber}) of
         [] ->
-            emqttd_pubsub:async_subscribe(Topic, Subscriber, Options),
-            Share = proplists:get_value(share, Options),
-            add_subscription_(Share, Subscriber, Topic),
-%            ets:insert(mqtt_subproperty, {{Topic, Subscriber}, Options}),
-            kvs:put({mqtt_subproperty, {Topic, Subscriber}, Options}),
+            emqttd_pubsub:subscribe(Topic, Subscriber, Options),
             {ok, monitor_subpid(Subscriber, State)};
         [_] ->
             {error, {already_subscribed, Topic}}
     end.
-
-add_subscription_(undefined, Subscriber, Topic) ->
-    kvs:put({mqtt_subscription, Subscriber, Topic});
-%    ets:insert(mqtt_subscription, {Subscriber, Topic});
-add_subscription_(Share, Subscriber, Topic) ->
-    kvs:put({mqtt_subscription, Subscriber, {Share, Topic}}).
-%    ets:insert(mqtt_subscription, {Subscriber, {Share, Topic}}).
 
 monitor_subpid(SubPid, State = #state{submon = PMon}) when is_pid(SubPid) ->
     State#state{submon = PMon:monitor(SubPid)};
@@ -257,11 +245,7 @@ monitor_subpid(_SubPid, State) ->
 do_unsubscribe_(Topic, Subscriber, State) ->
     case ets:lookup(mqtt_subproperty, {Topic, Subscriber}) of
         [{mqtt_subproperty, _, Options}] ->
-            emqttd_pubsub:async_unsubscribe(Topic, Subscriber, Options),
-            Share = proplists:get_value(share, Options),
-            del_subscription_(Share, Subscriber, Topic),
-%            ets:delete(mqtt_subproperty, {Topic, Subscriber}),
-            kvs:delete(mqtt_subproperty, {Topic, Subscriber}),
+            emqttd_pubsub:unsubscribe(Topic, Subscriber, Options),
             {ok, case ets:member(mqtt_subscription, Subscriber) of
                 true  -> State;
                 false -> demonitor_subpid(Subscriber, State)
@@ -269,13 +253,6 @@ do_unsubscribe_(Topic, Subscriber, State) ->
         [] ->
             {error, {subscription_not_found, Topic}}
     end.
-
-del_subscription_(undefined, Subscriber, Topic) ->
-    mnesia:dirty_delete_object({mqtt_subscription, Subscriber, Topic});
-%    ets:delete_object(mqtt_subscription, {Subscriber, Topic});
-del_subscription_(Share, Subscriber, Topic) ->
-    mnesia:dirty_delete_object({mqtt_subscription, Subscriber, {Share, Topic}}).
-%    ets:delete_object(mqtt_subscription, {Subscriber, {Share, Topic}}).
 
 demonitor_subpid(SubPid, State = #state{submon = PMon}) when is_pid(SubPid) ->
     State#state{submon = PMon:demonitor(SubPid)};

@@ -208,13 +208,11 @@ add_subscriber(Topic, Subscriber, Options) ->
 
 add_subscriber_(Share, Topic, Subscriber) ->
     (not ets:member(mqtt_subscriber, Topic)) andalso emqttd_router:add_route(Topic),
-    kvs:put({mqtt_subscriber, Topic, shared(Share, Subscriber)}).
-%    ets:insert(mqtt_subscriber, {Topic, shared(Share, Subscriber)}).
+    ets:insert(mqtt_subscriber, #mqtt_subscriber{key = Topic, value = shared(Share, Subscriber)}).
 
 add_local_subscriber_(Share, Topic, Subscriber) ->
     (not ets:member(mqtt_subscriber, {local, Topic})) andalso emqttd_router:add_local_route(Topic),
-    kvs:put({mqtt_subscriber, {local, Topic}, shared(Share, Subscriber)}).
-%    ets:insert(mqtt_subscriber, {{local, Topic}, shared(Share, Subscriber)}).
+    ets:insert(mqtt_subscriber, #mqtt_subscriber{key = {local, Topic}, value = shared(Share, Subscriber)}).
 
 del_subscriber(Topic, Subscriber, Options) ->
     Share = proplists:get_value(share, Options),
@@ -224,13 +222,11 @@ del_subscriber(Topic, Subscriber, Options) ->
     end.
 
 del_subscriber_(Share, Topic, Subscriber) ->
-    kvs:delete(mqtt_subscriber, {Topic, shared(Share, Subscriber)}),
-%    ets:delete_object(mqtt_subscriber, {Topic, shared(Share, Subscriber)}),
+    ets:delete_object(mqtt_subscriber, #mqtt_subscriber{key = Topic, value = shared(Share, Subscriber)}),
     (not ets:member(mqtt_subscriber, Topic)) andalso emqttd_router:del_route(Topic).
 
 del_local_subscriber_(Share, Topic, Subscriber) ->
-    kvs:delete(mqtt_subscriber, {{local, Topic}, shared(Share, Subscriber)}),
-%    ets:delete_object(mqtt_subscriber, {{local, Topic}, shared(Share, Subscriber)}),
+    ets:delete_object(mqtt_subscriber, #mqtt_subscriber{key = {local, Topic}, value = shared(Share, Subscriber)}),
     (not ets:member(mqtt_subscriber, {local, Topic})) andalso emqttd_router:del_local_route(Topic).
 
 shared(undefined, Subscriber) ->
