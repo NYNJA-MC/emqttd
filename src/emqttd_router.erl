@@ -24,10 +24,8 @@
 -include_lib("kernel/include/logger.hrl").
 
 %% Mnesia Bootstrap
--export([mnesia/1]).
-
--boot_mnesia({mnesia, [boot]}).
--copy_mnesia({mnesia, [copy]}).
+-export([mnesia_table_specs/0
+        ]).
 
 %% Start/Stop
 -export([start_link/0, topics/0, local_topics/0, stop/0]).
@@ -53,21 +51,17 @@
 %% Mnesia Bootstrap
 %%--------------------------------------------------------------------
 
-mnesia(boot) ->
-    ok = emqttd_mnesia:create_table(mqtt_topic, [
-                {disc_copies, [node()]},
-                {record_name, mqtt_topic},
-                {attributes, record_info(fields, mqtt_topic)}]),
-    ok = emqttd_mnesia:create_table(mqtt_route, [
-                {type, bag},
-                {disc_copies, [node()]},
-                {record_name, mqtt_route},
-                {attributes, record_info(fields, mqtt_route)}]);
-
-mnesia(copy) ->
-%    ok = emqttd_mnesia:copy_table(mqtt_topic, ram_copies),
-%    ok = emqttd_mnesia:copy_table(mqtt_route, ram_copies),
-    ok.
+mnesia_table_specs() ->
+    [{mqtt_topic, [ {disc_copies, [node()]},
+                    {record_name, mqtt_topic},
+                    {attributes, record_info(fields, mqtt_topic)}
+                  ]},
+     {mqtt_route, [ {type, bag},
+                    {disc_copies, [node()]},
+                    {record_name, mqtt_route},
+                    {attributes, record_info(fields, mqtt_route)}
+                  ]}
+    ].
 
 %%--------------------------------------------------------------------
 %% Start the Router

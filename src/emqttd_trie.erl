@@ -25,10 +25,7 @@
 -include("emqttd_trie.hrl").
 
 %% Mnesia Callbacks
--export([mnesia/1]).
-
--boot_mnesia({mnesia, [boot]}).
--copy_mnesia({mnesia, [copy]}).
+-export([mnesia_table_specs/0]).
 
 %% Trie API
 -export([insert/1, match/1, delete/1, lookup/1]).
@@ -37,26 +34,15 @@
 %% Mnesia Callbacks
 %%--------------------------------------------------------------------
 
-%% @doc Create or Replicate trie tables.
--spec(mnesia(boot | copy) -> ok).
-mnesia(boot) ->
-    %% Trie Table
-    ok = emqttd_mnesia:create_table(mqtt_trie, [
-                {disc_copies, [node()]},
-                {record_name, trie},
-                {attributes, record_info(fields, trie)}]),
-    %% Trie Node Table
-    ok = emqttd_mnesia:create_table(mqtt_trie_node, [
-                {disc_copies, [node()]},
-                {record_name, trie_node},
-                {attributes, record_info(fields, trie_node)}]);
-
-mnesia(copy) ->
-    %% Copy Trie Table
-%    ok = emqttd_mnesia:copy_table(trie),
-    %% Copy Trie Node Table
-%    ok = emqttd_mnesia:copy_table(trie_node),
-   ok.
+mnesia_table_specs() ->
+    [{mqtt_trie, [ {disc_copies, [node()]},
+                   {record_name, trie},
+                   {attributes, record_info(fields, trie)}
+                 ]},
+     {mqtt_trie_node, [ {disc_copies, [node()]},
+                        {record_name, trie_node},
+                        {attributes, record_info(fields, trie_node)}]}
+    ].
 
 %%--------------------------------------------------------------------
 %% Trie API

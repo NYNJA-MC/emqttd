@@ -115,9 +115,8 @@ groups() ->
        ]}].
 
 init_per_suite(Config) ->
-    application:set_env(kvs,dba,store_mnesia),
-    application:set_env(kvs,schema,[kvs_feed, emqttd_kvs]),
     application:start(mnesia),
+    emqttd_mnesia:start(),
     application:start(gproc),
     application:start(emqttc),
     DataDir = proplists:get_value(data_dir, Config),
