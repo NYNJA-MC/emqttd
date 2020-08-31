@@ -85,7 +85,7 @@ local_topics() ->
 match(Topic) when is_binary(Topic) ->
     Matched = mnesia:async_dirty(fun emqttd_trie:match/1, [Topic]),
     %% Optimize: route table will be replicated to all nodes.
-    lists:append([ets:lookup(mqtt_route, To) || To <- [Topic | Matched]]).
+    lists:append([mnesia:dirty_read(mqtt_route, To) || To <- [Topic | Matched]]).
 
 %% @doc Print Routes.
 -spec(print(Topic :: binary()) -> [ok]).
@@ -203,7 +203,8 @@ match_local(Name) ->
            emqttd_topic:match(Name, Filter)].
 
 dump() ->
-    [{route, ets:tab2list(mqtt_route)}, {local_route, ets:tab2list(mqtt_local_route)}].
+    [{route, mnesia:dirty_select(mqtt_route, [{'_', [], ['$_']}])},
+     {local_route, ets:tab2list(mqtt_local_route)}].
 
 stop() -> gen_server:call(?ROUTER, stop).
 
