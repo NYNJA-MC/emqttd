@@ -62,6 +62,7 @@ mnesia_table_specs() ->
     %% Global Session Table
     [{mqtt_session, [ {type, set},
                       {ram_copies, [node()]},
+                      {local_content, true},
                       {record_name, mqtt_session},
                       {attributes, record_info(fields, mqtt_session)}
                     ]}

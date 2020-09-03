@@ -44,9 +44,10 @@
 -spec(start() -> ok).
 start() ->
     ensure_ok(ensure_data_dir()),
-    ensure_ok(init_schema()),
     ensure_started(),
+    ensure_ok(init_schema()),
     wait_for(tables),
+    wait_for(sync_remote),
     ok = remove_legacy_tables(),
     init_tables(),
     wait_for(tables).
@@ -293,7 +294,7 @@ wait_for(start) ->
         stopping -> {error, mnesia_unexpectedly_stopping};
         starting -> timer:sleep(1000), wait_for(start)
     end;
- 
+
 wait_for(stop) ->
     case mnesia:system_info(is_running) of
         no       -> ok;
@@ -307,6 +308,15 @@ wait_for(tables) ->
     case mnesia:wait_for_tables(Tables, 600000) of
         ok                   -> ok;
         {error, Reason}      -> {error, Reason};
-        {timeout, BadTables} -> {error, {timetout, BadTables}}
+        {timeout, BadTables} -> {error, {timeout, BadTables}}
+    end;
+
+wait_for(sync_remote) ->
+    Tables = mnesia:system_info(tables) -- mnesia:system_info(local_tables),
+    case mnesia:wait_for_tables(Tables, 600000) of
+        ok                   -> ok;
+        {error, Reason}      -> {error, Reason};
+        {timeout, BadTables} -> {error, {timeout, BadTables}}
     end.
+
 
