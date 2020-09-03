@@ -134,9 +134,18 @@ init_tables([{Tab, Spec}|Left]) ->
     %% Check if the table exists
     try mnesia:table_info(Tab, all) of
         Info ->
-            Where = proplists:get_value(where_to_write, Info),
-            error_logger:format("Table ~w already exists: ~p\n", [Tab, Where]),
-            ok
+            case (Tab =:= mqtt_session)
+                andalso not proplists:get_value(local_content, Info) of
+                true ->
+                    %% On an old DB, this table did not have local_content
+                    %% as it should. It is in ram, so just recreate it.
+                    {atomic, ok} = mnesia:delete_table(Tab),
+                    ok = create_table(Tab, Spec),
+                    error_logger:format("Table ~w recreated\n", [Tab]);
+                false ->
+                    Where = proplists:get_value(where_to_write, Info),
+                    error_logger:format("Table ~w already exists: ~p\n", [Tab, Where])
+            end
     catch exit:{aborted, {no_exists, Tab, all}} ->
             error_logger:format("Creating table ~w with spec ~p\n", [Tab, Spec]),
             ok = create_table(Tab, Spec)
