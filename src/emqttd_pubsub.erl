@@ -151,7 +151,7 @@ dropped(_Topic) ->
     emqttd_metrics:inc('messages/dropped').
 
 %% @doc Unsubscribe
--spec(unsubscribe(binary(), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
+-spec(unsubscribe(binary(), emqttd:subscriber()) -> ok).
 unsubscribe(Topic, Subscriber) ->
     case ets:lookup(mqtt_subproperty, {Topic, Subscriber}) of
         [{mqtt_subproperty, _, Options}] ->
