@@ -24,7 +24,7 @@
 -export([start_link/3]).
 
 %% PubSub API.
--export([subscribe/3, async_subscribe/3, publish/2,
+-export([subscribe/3, async_subscribe/3, publish/2, setqos/3,
          unsubscribe/2, unsubscribe/3,
          async_unsubscribe/3, subscribers/1, subscriptions/1]).
 
@@ -51,6 +51,9 @@ start_link(Pool, Id, Env) ->
 %%--------------------------------------------------------------------
 %% PubSub API
 %%--------------------------------------------------------------------
+
+setqos(Topic, Subscriber, Qos) when is_binary(Topic) ->
+    call(pick(Subscriber), {setqos, Topic, Subscriber, Qos}).
 
 %% @doc Subscribe a Topic
 -spec(subscribe(binary(), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
@@ -193,6 +196,17 @@ handle_call({subscribe, Topic, Subscriber, Options}, _From, State) ->
 handle_call({unsubscribe, Topic, Subscriber, Options}, _From, State) ->
     del_subscriber(Topic, Subscriber, Options),
     {reply, ok, setstats(State), hibernate};
+
+handle_call({setqos, Topic, Subscriber, Qos}, _From, State) ->
+    Key = {Topic, Subscriber},
+    case ets:lookup(mqtt_subproperty, Key) of
+        [{mqtt_subproperty, _, Opts}] ->
+            Opts1 = lists:ukeymerge(1, [{qos, Qos}], Opts),
+            ets:insert(mqtt_subproperty, #mqtt_subproperty{key = Key, value = Opts1}),
+            {reply, ok, State};
+        [] ->
+            {reply, {error, {subscription_not_found, Topic}}, State}
+    end;
 
 handle_call(Req, _From, State) ->
     ?UNEXPECTED_REQ(Req, State).

@@ -113,7 +113,7 @@ unsubscribe(Topic, Subscriber) ->
 
 -spec(setqos(binary(), subscriber(), mqtt_qos()) -> ok).
 setqos(Topic, Subscriber, Qos) ->
-    emqttd_server:setqos(iolist_to_binary(Topic), Subscriber, Qos).
+    emqttd_pubsub:setqos(iolist_to_binary(Topic), Subscriber, Qos).
 
 -spec(topics() -> [binary()]).
 topics() -> emqttd_router:topics().

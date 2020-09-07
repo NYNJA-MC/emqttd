@@ -33,9 +33,6 @@
 %% PubSub API.
 -export([publish/1]).
 
-%% Management API.
--export([setqos/3]).
-
 %% Debug API
 -export([dump/0]).
 
@@ -69,8 +66,6 @@ publish(Msg = #mqtt_message{from = From}) ->
 %% @private
 trace(_, _, _) -> ok.
 
-setqos(Topic, Subscriber, Qos) when is_binary(Topic) ->
-    call(pick(Subscriber), {setqos, Topic, Subscriber, Qos}).
 
 
 call(Server, Req) ->
@@ -92,17 +87,6 @@ dump() ->
 init([Pool, Id, Env]) ->
     ?GPROC_POOL(join, Pool, Id),
     {ok, #state{pool = Pool, id = Id, env = Env, submon = emqttd_pmon:new()}}.
-
-handle_call({setqos, Topic, Subscriber, Qos}, _From, State) ->
-    Key = {Topic, Subscriber},
-    case ets:lookup(mqtt_subproperty, Key) of
-        [{mqtt_subproperty, _, Opts}] ->
-            Opts1 = lists:ukeymerge(1, [{qos, Qos}], Opts),
-            ets:insert(mqtt_subproperty, #mqtt_subproperty{key = Key, value = Opts1}),
-            {reply, ok, State};
-        [] ->
-            {reply, {error, {subscription_not_found, Topic}}, State}
-    end;
 
 handle_call(Req, _From, State) ->
     ?UNEXPECTED_REQ(Req, State).
