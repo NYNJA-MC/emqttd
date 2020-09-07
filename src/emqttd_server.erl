@@ -123,25 +123,6 @@ async_unsubscribe(Topic, Subscriber) when is_binary(Topic) ->
 setqos(Topic, Subscriber, Qos) when is_binary(Topic) ->
     call(pick(Subscriber), {setqos, Topic, Subscriber, Qos}).
 
--spec(subscriptions(emqttd:subscriber()) ->
-             [{binary(), emqttd:subscriber(), list(emqttd:suboption())}]).
-subscriptions(Subscriber) ->
-    lists:map(fun({mqtt_subscription, _, {_Share, Topic}}) ->
-                subscription(Topic, Subscriber);
-                 ({mqtt_subscription,_, Topic}) ->
-                subscription(Topic, Subscriber)
-        end, ets:lookup(mqtt_subscription, Subscriber)).
-
-subscription(Topic, Subscriber) ->
-    {Topic, Subscriber, ets:lookup_element(mqtt_subproperty, {Topic, Subscriber}, 3)}.
-
-subscribers(Topic) ->
-    emqttd_pubsub:subscribers(Topic).
-
--spec(is_subscribed(binary(), emqttd:subscriber()) -> boolean()).
-is_subscribed(Topic, Subscriber) when is_binary(Topic) ->
-    ets:member(mqtt_subproperty, {Topic, Subscriber}).
-
 
 call(Server, Req) ->
     gen_server2:call(Server, Req, infinity).
