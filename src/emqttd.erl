@@ -120,15 +120,15 @@ topics() -> emqttd_router:topics().
 
 -spec(subscribers(iodata()) -> list(subscriber())).
 subscribers(Topic) ->
-    emqttd_server:subscribers(iolist_to_binary(Topic)).
+    emqttd_pubsub:subscribers(iolist_to_binary(Topic)).
 
 -spec(subscriptions(subscriber()) -> [{binary(), subscriber(), suboption()}]).
 subscriptions(Subscriber) ->
-    emqttd_server:subscriptions(Subscriber).
+    emqttd_pubsub:subscriptions(Subscriber).
 
 -spec(is_subscribed(iodata(), subscriber()) -> boolean()).
 is_subscribed(Topic, Subscriber) ->
-    emqttd_server:is_subscribed(iolist_to_binary(Topic), Subscriber).
+    emqttd_pubsub:is_subscribed(iolist_to_binary(Topic), Subscriber).
 
 -spec(subscriber_down(subscriber()) -> ok).
 subscriber_down(Subscriber) ->

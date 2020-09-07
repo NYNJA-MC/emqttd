@@ -25,7 +25,7 @@
 
 %% PubSub API.
 -export([subscribe/3, async_subscribe/3, publish/2, unsubscribe/3,
-         async_unsubscribe/3, subscribers/1]).
+         async_unsubscribe/3, subscribers/1, subscriptions/1]).
 
 -export([dispatch/2]).
 
@@ -129,6 +129,18 @@ group_by_share(Subscribers) ->
                     {[Sub|Subs], Shares}
                 end, {[], dict:new()}, Subscribers),
     lists:append(Subs1, dict:to_list(Shares1)).
+
+-spec(subscriptions(emqttd:subscriber()) ->
+             [{binary(), emqttd:subscriber(), list(emqttd:suboption())}]).
+subscriptions(Subscriber) ->
+    lists:map(fun(#mqtt_subscription{value = {_Share, Topic}}) ->
+                      subscription(Topic, Subscriber);
+                 (#mqtt_subscription{value = Topic}) ->
+                      subscription(Topic, Subscriber)
+              end, ets:lookup(mqtt_subscription, Subscriber)).
+
+subscription(Topic, Subscriber) ->
+    {Topic, Subscriber, ets:lookup_element(mqtt_subproperty, {Topic, Subscriber}, 3)}.
 
 %% @private
 %% @doc Ingore $SYS Messages.
