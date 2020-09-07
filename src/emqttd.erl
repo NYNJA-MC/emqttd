@@ -161,5 +161,8 @@ run_hooks(Hook, Args, Acc) ->
 %% Debug
 %%--------------------------------------------------------------------
 
-dump() -> lists:append([emqttd_server:dump(), emqttd_router:dump()]).
+dump() ->
+    Dump1 = [{Tab, ets:tab2list(Tab)}
+             || Tab <- [mqtt_subproperty, mqtt_subscription, mqtt_subscriber]],
+    lists:append([Dump1, emqttd_router:dump()]).
 
