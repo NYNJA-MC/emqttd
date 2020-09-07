@@ -49,7 +49,7 @@ init([]) ->
     ets:new(mqtt_subscription, [bag|EtsOpts]),
     ets:new(mqtt_subproperty,  [set|EtsOpts]),
     {ok, Env} = emqttd:env(pubsub),
-    {ok, { {one_for_all, 10, 3600}, [pool_sup(pubsub, Env), pool_sup(server, Env)]} }.
+    {ok, { {one_for_all, 10, 3600}, [pool_sup(pubsub, Env)]} }.
 
 %%--------------------------------------------------------------------
 %% Pool
