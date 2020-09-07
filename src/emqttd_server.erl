@@ -39,8 +39,7 @@
          async_unsubscribe/1, async_unsubscribe/2]).
 
 %% Management API.
--export([setqos/3, subscriptions/1, subscribers/1, is_subscribed/2,
-         subscriber_down/1]).
+-export([setqos/3]).
 
 %% Debug API
 -export([dump/0]).
@@ -143,9 +142,6 @@ subscribers(Topic) ->
 is_subscribed(Topic, Subscriber) when is_binary(Topic) ->
     ets:member(mqtt_subproperty, {Topic, Subscriber}).
 
--spec(subscriber_down(emqttd:subscriber()) -> ok).
-subscriber_down(Subscriber) ->
-    cast(pick(Subscriber), {subscriber_down, Subscriber}).
 
 call(Server, Req) ->
     gen_server2:call(Server, Req, infinity).
@@ -205,15 +201,10 @@ handle_cast({unsubscribe, Topic, Subscriber}, State) ->
         {error, _Error} -> {noreply, State}
     end;
 
-handle_cast({subscriber_down, Subscriber}, State) ->
-    subscriber_down_(Subscriber),
-    {noreply, setstats(State)};
-
 handle_cast(Msg, State) ->
     ?UNEXPECTED_MSG(Msg, State).
 
 handle_info({'DOWN', _MRef, process, DownPid, _Reason}, State = #state{submon = PM}) ->
-    subscriber_down_(DownPid),
     {noreply, setstats(State#state{submon = PM:erase(DownPid)}), hibernate};
 
 handle_info(Info, State) ->
@@ -259,9 +250,6 @@ demonitor_subpid(SubPid, State = #state{submon = PMon}) when is_pid(SubPid) ->
     State#state{submon = PMon:demonitor(SubPid)};
 demonitor_subpid(_SubPid, State) ->
     State.
-
-subscriber_down_(_Subscriber) ->
-    ok.
 
 setstats(State) ->
     emqttd_stats:setstats('subscriptions/count', 'subscriptions/max',

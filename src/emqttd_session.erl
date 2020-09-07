@@ -579,7 +579,6 @@ handle_info(Info, Session) ->
 terminate(Reason, #state{client_id = ClientId, username = Username}) ->
     emqttd_stats:del_session_stats(ClientId),
     emqttd_hooks:run('session.terminated', [ClientId, Username, Reason]),
-    emqttd_server:subscriber_down(ClientId),
     emqttd_sm:unregister_session(ClientId).
 
 code_change(_OldVsn, Session, _Extra) ->

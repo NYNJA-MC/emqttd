@@ -32,7 +32,7 @@
 
 %% PubSub Management API
 -export([setqos/3, topics/0, subscriptions/1, subscribers/1,
-         is_subscribed/2, subscriber_down/1]).
+         is_subscribed/2]).
 
 %% Hooks API
 -export([hook/4, hook/3, unhook/2, run_hooks/2, run_hooks/3]).
@@ -129,10 +129,6 @@ subscriptions(Subscriber) ->
 -spec(is_subscribed(iodata(), subscriber()) -> boolean()).
 is_subscribed(Topic, Subscriber) ->
     emqttd_pubsub:is_subscribed(iolist_to_binary(Topic), Subscriber).
-
--spec(subscriber_down(subscriber()) -> ok).
-subscriber_down(Subscriber) ->
-    emqttd_server:subscriber_down(Subscriber).
 
 %%--------------------------------------------------------------------
 %% Hooks API
