@@ -109,7 +109,7 @@ unsubscribe(Topic) ->
 
 -spec(unsubscribe(iodata(), subscriber()) -> ok | pubsub_error()).
 unsubscribe(Topic, Subscriber) ->
-    emqttd_server:unsubscribe(iolist_to_binary(Topic), Subscriber).
+    emqttd_pubsub:unsubscribe(iolist_to_binary(Topic), Subscriber).
 
 -spec(setqos(binary(), subscriber(), mqtt_qos()) -> ok).
 setqos(Topic, Subscriber, Qos) ->

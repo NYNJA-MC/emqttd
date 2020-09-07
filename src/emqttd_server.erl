@@ -31,12 +31,10 @@
 -export([start_link/3]).
 
 %% PubSub API.
--export([subscribe/1, subscribe/2, subscribe/3, publish/1,
-         unsubscribe/1, unsubscribe/2]).
+-export([subscribe/1, subscribe/2, subscribe/3, publish/1]).
 
 %% Async PubSub API.
--export([async_subscribe/1, async_subscribe/2, async_subscribe/3,
-         async_unsubscribe/1, async_unsubscribe/2]).
+-export([async_subscribe/1, async_subscribe/2, async_subscribe/3]).
 
 %% Management API.
 -export([setqos/3]).
@@ -101,25 +99,6 @@ publish(Msg = #mqtt_message{from = From}) ->
 %% @private
 trace(_, _, _) -> ok.
 
-%% @doc Unsubscribe
--spec(unsubscribe(binary()) -> ok | emqttd:pubsub_error()).
-unsubscribe(Topic) when is_binary(Topic) ->
-    unsubscribe(Topic, self()).
-
-%% @doc Unsubscribe
--spec(unsubscribe(binary(), emqttd:subscriber()) -> ok | emqttd:pubsub_error()).
-unsubscribe(Topic, Subscriber) when is_binary(Topic) ->
-    call(pick(Subscriber), {unsubscribe, Topic, Subscriber}).
-
-%% @doc Async Unsubscribe
--spec(async_unsubscribe(binary()) -> ok).
-async_unsubscribe(Topic) when is_binary(Topic) ->
-    async_unsubscribe(Topic, self()).
-
--spec(async_unsubscribe(binary(), emqttd:subscriber()) -> ok).
-async_unsubscribe(Topic, Subscriber) when is_binary(Topic) ->
-    cast(pick(Subscriber), {unsubscribe, Topic, Subscriber}).
-
 setqos(Topic, Subscriber, Qos) when is_binary(Topic) ->
     call(pick(Subscriber), {setqos, Topic, Subscriber, Qos}).
 
@@ -150,12 +129,6 @@ handle_call({subscribe, Topic, Subscriber, Options}, _From, State) ->
         {error, Error} -> {reply, {error, Error}, State}
     end;
 
-handle_call({unsubscribe, Topic, Subscriber}, _From, State) ->
-    case do_unsubscribe_(Topic, Subscriber, State) of
-        {ok, NewState} -> {reply, ok, setstats(NewState), hibernate};
-        {error, Error} -> {reply, {error, Error}, State}
-    end;
-
 handle_call({setqos, Topic, Subscriber, Qos}, _From, State) ->
     Key = {Topic, Subscriber},
     case ets:lookup(mqtt_subproperty, Key) of
@@ -173,12 +146,6 @@ handle_call(Req, _From, State) ->
 handle_cast({subscribe, Topic, Subscriber, Options}, State) ->
     case do_subscribe_(Topic, Subscriber, Options, State) of
         {ok, NewState}  -> {noreply, setstats(NewState)};
-        {error, _Error} -> {noreply, State}
-    end;
-
-handle_cast({unsubscribe, Topic, Subscriber}, State) ->
-    case do_unsubscribe_(Topic, Subscriber, State) of
-        {ok, NewState}  -> {noreply, setstats(NewState), hibernate};
         {error, _Error} -> {noreply, State}
     end;
 
@@ -214,18 +181,6 @@ monitor_subpid(SubPid, State = #state{submon = PMon}) when is_pid(SubPid) ->
     State#state{submon = PMon:monitor(SubPid)};
 monitor_subpid(_SubPid, State) ->
     State.
-
-do_unsubscribe_(Topic, Subscriber, State) ->
-    case ets:lookup(mqtt_subproperty, {Topic, Subscriber}) of
-        [{mqtt_subproperty, _, Options}] ->
-            emqttd_pubsub:unsubscribe(Topic, Subscriber, Options),
-            {ok, case ets:member(mqtt_subscription, Subscriber) of
-                true  -> State;
-                false -> demonitor_subpid(Subscriber, State)
-            end};
-        [] ->
-            {error, {subscription_not_found, Topic}}
-    end.
 
 demonitor_subpid(SubPid, State = #state{submon = PMon}) when is_pid(SubPid) ->
     State#state{submon = PMon:demonitor(SubPid)};

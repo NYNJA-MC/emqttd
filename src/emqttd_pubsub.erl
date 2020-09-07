@@ -24,7 +24,8 @@
 -export([start_link/3]).
 
 %% PubSub API.
--export([subscribe/3, async_subscribe/3, publish/2, unsubscribe/3,
+-export([subscribe/3, async_subscribe/3, publish/2,
+         unsubscribe/2, unsubscribe/3,
          async_unsubscribe/3, subscribers/1, subscriptions/1]).
 
 -export([dispatch/2]).
@@ -150,6 +151,15 @@ dropped(_Topic) ->
     emqttd_metrics:inc('messages/dropped').
 
 %% @doc Unsubscribe
+-spec(unsubscribe(binary(), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
+unsubscribe(Topic, Subscriber) ->
+    case ets:lookup(mqtt_subproperty, {Topic, Subscriber}) of
+        [{mqtt_subproperty, _, Options}] ->
+            unsubscribe(Topic, Subscriber, Options);
+        [] ->
+            {error, {subscription_not_found, Topic}}
+    end.
+
 -spec(unsubscribe(binary(), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
 unsubscribe(Topic, Subscriber, Options) ->
     call(pick(Topic), {unsubscribe, Topic, Subscriber, Options}).
