@@ -31,10 +31,7 @@
 -export([start_link/3]).
 
 %% PubSub API.
--export([subscribe/1, subscribe/2, subscribe/3, publish/1]).
-
-%% Async PubSub API.
--export([async_subscribe/1, async_subscribe/2, async_subscribe/3]).
+-export([publish/1]).
 
 %% Management API.
 -export([setqos/3]).
@@ -56,33 +53,6 @@ start_link(Pool, Id, Env) ->
 %%--------------------------------------------------------------------
 %% PubSub API
 %%--------------------------------------------------------------------
-
-%% @doc Subscribe a Topic
--spec(subscribe(binary()) -> ok | emqttd:pubsub_error()).
-subscribe(Topic) when is_binary(Topic) ->
-    subscribe(Topic, self()).
-
--spec(subscribe(binary(), emqttd:subscriber()) -> ok | emqttd:pubsub_error()).
-subscribe(Topic, Subscriber) when is_binary(Topic) ->
-    subscribe(Topic, Subscriber, []).
-
--spec(subscribe(binary(), emqttd:subscriber(), [emqttd:suboption()]) ->
-      ok | emqttd:pubsub_error()).
-subscribe(Topic, Subscriber, Options) when is_binary(Topic) ->
-    call(pick(Subscriber), {subscribe, Topic, Subscriber, Options}).
-
-%% @doc Subscribe a Topic Asynchronously
--spec(async_subscribe(binary()) -> ok).
-async_subscribe(Topic) when is_binary(Topic) ->
-    async_subscribe(Topic, self()).
-
--spec(async_subscribe(binary(), emqttd:subscriber()) -> ok).
-async_subscribe(Topic, Subscriber) when is_binary(Topic) ->
-    async_subscribe(Topic, Subscriber, []).
-
--spec(async_subscribe(binary(), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
-async_subscribe(Topic, Subscriber, Options) when is_binary(Topic) ->
-    cast(pick(Subscriber), {subscribe, Topic, Subscriber, Options}).
 
 %% @doc Publish message to Topic.
 -spec(publish(mqtt_message()) -> {ok, mqtt_delivery()} | ignore).
@@ -123,12 +93,6 @@ init([Pool, Id, Env]) ->
     ?GPROC_POOL(join, Pool, Id),
     {ok, #state{pool = Pool, id = Id, env = Env, submon = emqttd_pmon:new()}}.
 
-handle_call({subscribe, Topic, Subscriber, Options}, _From, State) ->
-    case do_subscribe_(Topic, Subscriber, Options, State) of
-        {ok, NewState} -> {reply, ok, setstats(NewState)};
-        {error, Error} -> {reply, {error, Error}, State}
-    end;
-
 handle_call({setqos, Topic, Subscriber, Qos}, _From, State) ->
     Key = {Topic, Subscriber},
     case ets:lookup(mqtt_subproperty, Key) of
@@ -143,17 +107,8 @@ handle_call({setqos, Topic, Subscriber, Qos}, _From, State) ->
 handle_call(Req, _From, State) ->
     ?UNEXPECTED_REQ(Req, State).
 
-handle_cast({subscribe, Topic, Subscriber, Options}, State) ->
-    case do_subscribe_(Topic, Subscriber, Options, State) of
-        {ok, NewState}  -> {noreply, setstats(NewState)};
-        {error, _Error} -> {noreply, State}
-    end;
-
 handle_cast(Msg, State) ->
     ?UNEXPECTED_MSG(Msg, State).
-
-handle_info({'DOWN', _MRef, process, DownPid, _Reason}, State = #state{submon = PM}) ->
-    {noreply, setstats(State#state{submon = PM:erase(DownPid)}), hibernate};
 
 handle_info(Info, State) ->
     ?UNEXPECTED_INFO(Info, State).
@@ -163,31 +118,3 @@ terminate(_Reason, #state{pool = Pool, id = Id}) ->
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
-
-%%--------------------------------------------------------------------
-%% Internal Functions
-%%--------------------------------------------------------------------
-
-do_subscribe_(Topic, Subscriber, Options, State) ->
-    case ets:lookup(mqtt_subproperty, {Topic, Subscriber}) of
-        [] ->
-            emqttd_pubsub:subscribe(Topic, Subscriber, Options),
-            {ok, monitor_subpid(Subscriber, State)};
-        [_] ->
-            {error, {already_subscribed, Topic}}
-    end.
-
-monitor_subpid(SubPid, State = #state{submon = PMon}) when is_pid(SubPid) ->
-    State#state{submon = PMon:monitor(SubPid)};
-monitor_subpid(_SubPid, State) ->
-    State.
-
-demonitor_subpid(SubPid, State = #state{submon = PMon}) when is_pid(SubPid) ->
-    State#state{submon = PMon:demonitor(SubPid)};
-demonitor_subpid(_SubPid, State) ->
-    State.
-
-setstats(State) ->
-    emqttd_stats:setstats('subscriptions/count', 'subscriptions/max',
-                          ets:info(mqtt_subscription, size)), State.
-

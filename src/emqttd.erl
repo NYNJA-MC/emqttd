@@ -95,7 +95,7 @@ subscribe(Topic, Subscriber) ->
 
 -spec(subscribe(iodata(), subscriber(), [suboption()]) -> ok | pubsub_error()).
 subscribe(Topic, Subscriber, Options) ->
-    emqttd_server:subscribe(iolist_to_binary(Topic), Subscriber, Options).
+    emqttd_pubsub:subscribe(iolist_to_binary(Topic), Subscriber, Options).
 
 %% @doc Publish MQTT Message
 -spec(publish(mqtt_message()) -> {ok, mqtt_delivery()} | ignore).
