@@ -24,7 +24,7 @@
 -export([start_link/3]).
 
 %% PubSub API.
--export([subscribe/3, async_subscribe/3, publish/2, setqos/3,
+-export([subscribe/3, async_subscribe/3, publish/1, publish/2, setqos/3,
          unsubscribe/2, unsubscribe/3,
          async_unsubscribe/3, subscribers/1, subscriptions/1]).
 
@@ -63,6 +63,16 @@ subscribe(Topic, Subscriber, Options) ->
 -spec(async_subscribe(binary(), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
 async_subscribe(Topic, Subscriber, Options) ->
     cast(pick(Topic), {subscribe, Topic, Subscriber, Options}).
+
+-spec(publish(mqtt_message()) -> {ok, mqtt_delivery()} | ignore).
+publish(Msg = #mqtt_message{}) ->
+    case emqttd_hooks:run('message.publish', [], Msg) of
+        {ok, Msg1 = #mqtt_message{topic = Topic}} ->
+            publish(Topic, Msg1);
+        {stop, Msg1} ->
+            ?LOG_WARNING("Stop publishing: ~s", [emqttd_message:format(Msg1)]),
+            ignore
+    end.
 
 %% @doc Publish MQTT Message to Topic
 -spec(publish(binary(), any()) -> {ok, mqtt_delivery()} | ignore).

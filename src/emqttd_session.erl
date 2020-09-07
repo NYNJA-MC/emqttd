@@ -193,11 +193,11 @@ subscribe(Session, PacketId, TopicTable) -> %%TODO: the ack function??...
 -spec(publish(pid(), mqtt_message()) -> ok | {error, any()}).
 publish(_Session, Msg = #mqtt_message{qos = ?QOS_0}) ->
     %% Publish QoS0 Directly
-    emqttd_server:publish(Msg), ok;
+    emqttd_pubsub:publish(Msg), ok;
 
 publish(_Session, Msg = #mqtt_message{qos = ?QOS_1}) ->
     %% Publish QoS1 message directly for client will PubAck automatically
-    emqttd_server:publish(Msg), ok;
+    emqttd_pubsub:publish(Msg), ok;
 
 publish(Session, Msg = #mqtt_message{qos = ?QOS_2}) ->
     %% Publish QoS2 to Session
@@ -454,7 +454,7 @@ handle_cast({pubrel, PacketId}, State = #state{awaiting_rel = AwaitingRel}) ->
     {noreply,
      case maps:take(PacketId, AwaitingRel) of
          {Msg, AwaitingRel1} ->
-             spawn(emqttd_server, publish, [Msg]), %%:)
+             spawn(emqttd_pubsub, publish, [Msg]), %%:)
              gc(State#state{awaiting_rel = AwaitingRel1});
          error ->
              ?LOCAL_LOG(warning, "Cannot find PUBREL: ~p", [PacketId], State),

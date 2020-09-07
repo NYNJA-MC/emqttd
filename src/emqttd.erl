@@ -100,7 +100,7 @@ subscribe(Topic, Subscriber, Options) ->
 %% @doc Publish MQTT Message
 -spec(publish(mqtt_message()) -> {ok, mqtt_delivery()} | ignore).
 publish(Msg) ->
-    emqttd_server:publish(Msg).
+    emqttd_pubsub:publish(Msg).
 
 %% @doc Unsubscribe
 -spec(unsubscribe(iodata()) -> ok | pubsub_error()).

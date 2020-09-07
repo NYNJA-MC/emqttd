@@ -30,9 +30,6 @@
 
 -export([start_link/3]).
 
-%% PubSub API.
--export([publish/1]).
-
 %% Debug API
 -export([dump/0]).
 
@@ -52,21 +49,6 @@ start_link(Pool, Id, Env) ->
 %%--------------------------------------------------------------------
 
 %% @doc Publish message to Topic.
--spec(publish(mqtt_message()) -> {ok, mqtt_delivery()} | ignore).
-publish(Msg = #mqtt_message{from = From}) ->
-    trace(publish, From, Msg),
-    case emqttd_hooks:run('message.publish', [], Msg) of
-        {ok, Msg1 = #mqtt_message{topic = Topic}} ->
-            emqttd_pubsub:publish(Topic, Msg1);
-        {stop, Msg1} ->
-            ?LOG_WARNING("Stop publishing: ~s", [emqttd_message:format(Msg1)]),
-            ignore
-    end.
-
-%% @private
-trace(_, _, _) -> ok.
-
-
 
 call(Server, Req) ->
     gen_server2:call(Server, Req, infinity).
