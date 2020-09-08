@@ -32,7 +32,7 @@
 
 %% PubSub Management API
 -export([setqos/3, topics/0, subscriptions/1, subscribers/1,
-         is_subscribed/2, subscriber_down/1]).
+         is_subscribed/2]).
 
 %% Hooks API
 -export([hook/4, hook/3, unhook/2, run_hooks/2, run_hooks/3]).
@@ -95,12 +95,12 @@ subscribe(Topic, Subscriber) ->
 
 -spec(subscribe(iodata(), subscriber(), [suboption()]) -> ok | pubsub_error()).
 subscribe(Topic, Subscriber, Options) ->
-    emqttd_server:subscribe(iolist_to_binary(Topic), Subscriber, Options).
+    emqttd_pubsub:subscribe(iolist_to_binary(Topic), Subscriber, Options).
 
 %% @doc Publish MQTT Message
 -spec(publish(mqtt_message()) -> {ok, mqtt_delivery()} | ignore).
 publish(Msg) ->
-    emqttd_server:publish(Msg).
+    emqttd_pubsub:publish(Msg).
 
 %% @doc Unsubscribe
 -spec(unsubscribe(iodata()) -> ok | pubsub_error()).
@@ -109,30 +109,26 @@ unsubscribe(Topic) ->
 
 -spec(unsubscribe(iodata(), subscriber()) -> ok | pubsub_error()).
 unsubscribe(Topic, Subscriber) ->
-    emqttd_server:unsubscribe(iolist_to_binary(Topic), Subscriber).
+    emqttd_pubsub:unsubscribe(iolist_to_binary(Topic), Subscriber).
 
 -spec(setqos(binary(), subscriber(), mqtt_qos()) -> ok).
 setqos(Topic, Subscriber, Qos) ->
-    emqttd_server:setqos(iolist_to_binary(Topic), Subscriber, Qos).
+    emqttd_pubsub:setqos(iolist_to_binary(Topic), Subscriber, Qos).
 
 -spec(topics() -> [binary()]).
 topics() -> emqttd_router:topics().
 
 -spec(subscribers(iodata()) -> list(subscriber())).
 subscribers(Topic) ->
-    emqttd_server:subscribers(iolist_to_binary(Topic)).
+    emqttd_pubsub:subscribers(iolist_to_binary(Topic)).
 
 -spec(subscriptions(subscriber()) -> [{binary(), subscriber(), suboption()}]).
 subscriptions(Subscriber) ->
-    emqttd_server:subscriptions(Subscriber).
+    emqttd_pubsub:subscriptions(Subscriber).
 
 -spec(is_subscribed(iodata(), subscriber()) -> boolean()).
 is_subscribed(Topic, Subscriber) ->
-    emqttd_server:is_subscribed(iolist_to_binary(Topic), Subscriber).
-
--spec(subscriber_down(subscriber()) -> ok).
-subscriber_down(Subscriber) ->
-    emqttd_server:subscriber_down(Subscriber).
+    emqttd_pubsub:is_subscribed(iolist_to_binary(Topic), Subscriber).
 
 %%--------------------------------------------------------------------
 %% Hooks API
@@ -165,5 +161,8 @@ run_hooks(Hook, Args, Acc) ->
 %% Debug
 %%--------------------------------------------------------------------
 
-dump() -> lists:append([emqttd_server:dump(), emqttd_router:dump()]).
+dump() ->
+    Dump1 = [{Tab, ets:tab2list(Tab)}
+             || Tab <- [mqtt_subproperty, mqtt_subscription, mqtt_subscriber]],
+    lists:append([Dump1, emqttd_router:dump()]).
 
