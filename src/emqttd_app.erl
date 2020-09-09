@@ -39,11 +39,7 @@
 
 start(_Type, _Args) ->
     print_banner(),
-    kvs:join(),
     emqttd_mnesia:start(),
-    emqttd_trie:mnesia(boot),
-    emqttd_sm:mnesia(boot),
-    emqttd_router:mnesia(boot),
     {ok, Sup} = emqttd_sup:start_link(),
     [ begin _ = erlang:apply(X,Y,Z) end
             || {X,Y,Z} <- [{?MODULE,start_servers,[Sup]},

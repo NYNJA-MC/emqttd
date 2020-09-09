@@ -24,10 +24,8 @@
 -include_lib("kernel/include/logger.hrl").
 
 %% Mnesia Bootstrap
--export([mnesia/1]).
-
--boot_mnesia({mnesia, [boot]}).
--copy_mnesia({mnesia, [copy]}).
+-export([mnesia_table_specs/0
+        ]).
 
 %% Start/Stop
 -export([start_link/0, topics/0, local_topics/0, stop/0]).
@@ -53,21 +51,17 @@
 %% Mnesia Bootstrap
 %%--------------------------------------------------------------------
 
-mnesia(boot) ->
-    ok = emqttd_mnesia:create_table(mqtt_topic, [
-                {disc_copies, [node()]},
-                {record_name, mqtt_topic},
-                {attributes, record_info(fields, mqtt_topic)}]),
-    ok = emqttd_mnesia:create_table(mqtt_route, [
-                {type, bag},
-                {disc_copies, [node()]},
-                {record_name, mqtt_route},
-                {attributes, record_info(fields, mqtt_route)}]);
-
-mnesia(copy) ->
-%    ok = emqttd_mnesia:copy_table(mqtt_topic, ram_copies),
-%    ok = emqttd_mnesia:copy_table(mqtt_route, ram_copies),
-    ok.
+mnesia_table_specs() ->
+    [{mqtt_topic, [ {disc_copies, [node()]},
+                    {record_name, mqtt_topic},
+                    {attributes, record_info(fields, mqtt_topic)}
+                  ]},
+     {mqtt_route, [ {type, bag},
+                    {disc_copies, [node()]},
+                    {record_name, mqtt_route},
+                    {attributes, record_info(fields, mqtt_route)}
+                  ]}
+    ].
 
 %%--------------------------------------------------------------------
 %% Start the Router
@@ -91,7 +85,7 @@ local_topics() ->
 match(Topic) when is_binary(Topic) ->
     Matched = mnesia:async_dirty(fun emqttd_trie:match/1, [Topic]),
     %% Optimize: route table will be replicated to all nodes.
-    lists:append([ets:lookup(mqtt_route, To) || To <- [Topic | Matched]]).
+    lists:append([mnesia:dirty_read(mqtt_route, To) || To <- [Topic | Matched]]).
 
 %% @doc Print Routes.
 -spec(print(Topic :: binary()) -> [ok]).
@@ -209,7 +203,8 @@ match_local(Name) ->
            emqttd_topic:match(Name, Filter)].
 
 dump() ->
-    [{route, ets:tab2list(mqtt_route)}, {local_route, ets:tab2list(mqtt_local_route)}].
+    [{route, mnesia:dirty_select(mqtt_route, [{'_', [], ['$_']}])},
+     {local_route, ets:tab2list(mqtt_local_route)}].
 
 stop() -> gen_server:call(?ROUTER, stop).
 

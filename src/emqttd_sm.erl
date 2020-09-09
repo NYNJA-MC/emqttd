@@ -27,10 +27,7 @@
 -include_lib("kernel/include/logger.hrl").
 
 %% Mnesia Callbacks
--export([mnesia/1]).
-
--boot_mnesia({mnesia, [boot]}).
--copy_mnesia({mnesia, [copy]}).
+-export([mnesia_table_specs/0]).
 
 %% API Function Exports
 -export([start_link/2]).
@@ -61,16 +58,14 @@
 %% Mnesia callbacks
 %%--------------------------------------------------------------------
 
-mnesia(boot) ->
+mnesia_table_specs() ->
     %% Global Session Table
-    ok = emqttd_mnesia:create_table(mqtt_session, [
-                {type, set},
-                {ram_copies, [node()]},
-                {record_name, mqtt_session},
-                {attributes, record_info(fields, mqtt_session)}]);
-
-mnesia(copy) ->
-    ok = emqttd_mnesia:copy_table(mqtt_session).
+    [{mqtt_session, [ {type, set},
+                      {ram_copies, [node()]},
+                      {record_name, mqtt_session},
+                      {attributes, record_info(fields, mqtt_session)}
+                    ]}
+    ].
 
 %%--------------------------------------------------------------------
 %% API

@@ -33,6 +33,9 @@
 -export([copy_schema/1, delete_schema/0, del_schema_copy/1,
          create_table/2, copy_table/1, copy_table/2]).
 
+-export([table_specs/0
+        ]).
+
 %%--------------------------------------------------------------------
 %% Start and init mnesia
 %%--------------------------------------------------------------------
@@ -42,9 +45,16 @@
 start() ->
     ensure_ok(ensure_data_dir()),
     ensure_ok(init_schema()),
-    ok = mnesia:start(),
+    ensure_started(),
+    wait_for(tables),
+    ok = remove_legacy_tables(),
     init_tables(),
     wait_for(tables).
+
+table_specs() ->
+    emqttd_router:mnesia_table_specs()
+        ++ emqttd_sm:mnesia_table_specs()
+        ++ emqttd_trie:mnesia_table_specs().
 
 %% @private
 ensure_data_dir() ->
@@ -67,26 +77,70 @@ ensure_stopped() ->
 %% @private
 %% @doc Init mnesia schema or tables.
 init_schema() ->
-    case mnesia:system_info(extra_db_nodes) of
-        []    -> mnesia:create_schema([node()]);
-        [_|_] -> ok
+    Node = node(),
+    case mnesia:table_info(schema, where_to_write) of
+        [Node] ->
+            case mnesia:table_info(schema, disc_copies) of
+                [] ->
+                    {atomic, ok} =
+                        mnesia:change_table_copy_type(schema, node(),
+                                                      disc_copies),
+                    ok;
+                _Other ->
+                    ok
+            end;
+        _Other ->
+            ok
     end.
+
+%% @doc Remove tables from DB the used to be persisted, but should not be.
+remove_legacy_tables() ->
+    Tabs = [mqtt_subscriber, mqtt_subscription, mqtt_subproperty],
+    remove_legacy_tables(Tabs).
+
+remove_legacy_tables([]) ->
+    ok;
+remove_legacy_tables([Tab|Left]) ->
+    try mnesia:table_info(Tab, all) of
+        _What ->
+            error_logger:format("Table info ~p: ~p\n", [Tab, _What]),
+            error_logger:format("Removing legacy table ~p from db\n", [Tab]),
+            {atomic, ok} = mnesia:delete_table(Tab),
+            remove_legacy_tables(Left)
+    catch exit:{aborted, {no_exists, Tab, all}} ->
+            remove_legacy_tables(Left)
+    end.
+
+%% @doc Copy mnesia tables.
+copy_tables() ->
+    Tabs = [X || {X, _} <- table_specs()],
+    copy_tables(Tabs).
+
+copy_tables([]) ->
+    ok;
+copy_tables([Tab|Left]) ->
+    ok = copy_table(Tab),
+    copy_table(Left).
 
 %% @private
 %% @doc Init mnesia tables.
 init_tables() ->
-    case mnesia:system_info(extra_db_nodes) of
-        []    -> create_tables();
-        [_|_] -> copy_tables()
-    end.
+    init_tables(table_specs()).
 
-%% @doc Create mnesia tables.
-create_tables() ->
-    emqttd_boot:apply_module_attributes(boot_mnesia).
-
-%% @doc Copy mnesia tables.
-copy_tables() ->
-    emqttd_boot:apply_module_attributes(copy_mnesia).
+init_tables([]) ->
+    ok;
+init_tables([{Tab, Spec}|Left]) ->
+    %% Check if the table exists
+    try mnesia:table_info(Tab, all) of
+        Info ->
+            Where = proplists:get_value(where_to_write, Info),
+            error_logger:format("Table ~w already exists: ~p\n", [Tab, Where]),
+            ok
+    catch exit:{aborted, {no_exists, Tab, all}} ->
+            error_logger:format("Creating table ~w with spec ~p\n", [Tab, Spec]),
+            ok = create_table(Tab, Spec)
+    end,
+    init_tables(Left).
 
 %% @doc Create mnesia table.
 -spec(create_table(Name:: atom(), TabDef :: list()) -> ok | {error, any()}).
