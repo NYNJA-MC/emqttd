@@ -77,7 +77,7 @@ groups() ->
      {hook, [sequence],
       [add_delete_hook,
        run_hooks]},
-    {http, [sequence], 
+    {http, [sequence],
      [request_status,
       request_publish
      % websocket_test
@@ -90,7 +90,7 @@ groups() ->
 %      cluster_remove2,
 %      cluster_node_down
 %     ]},
-     {alarms, [sequence], 
+     {alarms, [sequence],
      [set_alarms]
      },
      {cli, [sequence],
@@ -220,7 +220,7 @@ pubsub(_) ->
     ok = emqttd:subscribe(<<"a/b/c">>, Self, [{qos, 1}]),
     ?assertMatch({error, _}, emqttd:subscribe(<<"a/b/c">>, Self, [{qos, 2}])),
     timer:sleep(10),
-    [{mqtt_subscription, Self, <<"a/b/c">>}] = ets:lookup(mqtt_subscription, Self),
+    [[<<"a/b/c">>]] = ets:match(mqtt_subscription, {{Self, '$1'}}),
     [{mqtt_subscriber, <<"a/b/c">>, Self}]   = ets:lookup(mqtt_subscriber, <<"a/b/c">>),
     emqttd:publish(emqttd_message:make(ct, <<"a/b/c">>, <<"hello">>)),
     ?assert(receive {dispatch, <<"a/b/c">>, _} -> true after 2 -> false end),
@@ -241,7 +241,7 @@ t_local_subscribe(_) ->
     ?assertEqual([self()], emqttd:subscribers("$local/topic0")),
     ?assertEqual([<<"x">>], emqttd:subscribers("$local/topic1")),
     ?assertEqual([{<<"$local/topic1">>,<<"x">>,[]},{<<"$local/topic2">>,<<"x">>,[{qos,2}]}], emqttd:subscriptions(<<"x">>)),
-    
+
     ?assertEqual(ok, emqttd:unsubscribe("$local/topic0")),
     ?assertMatch({error, {subscription_not_found, _}}, emqttd:unsubscribe("$local/topic0")),
     ?assertEqual(ok, emqttd:unsubscribe("$local/topic1", <<"x">>)),
@@ -506,7 +506,7 @@ cluster_join(_) ->
     ok = emqttd_cluster:join(Z),
     slave:stop(Z),
     slave:stop(N).
- 
+
 cluster_leave(_) ->
     Z = slave(emqttd, cluster_leave_z),
     wait_running(Z),

@@ -237,10 +237,11 @@ subscriptions(["list"]) ->
                       print(subscription, Subscription)
                   end, ets:tab2list(mqtt_subscription));
 
-subscriptions(["show", ClientId]) ->
-    case ets:lookup(mqtt_subscription, bin(ClientId)) of
-        []      -> ?PRINT_MSG("Not Found.~n");
-        Records -> [print(subscription, Subscription) || Subscription <- Records]
+subscriptions(["show", ClientId0]) ->
+    ClientId = bin(ClientId0),
+    case ets:match(mqtt_subscription, {{ClientId, '$1'}}) of
+        []     -> ?PRINT_MSG("Not Found.~n");
+        Topics -> [print(subscription, {ClientId, Topic}) || [Topic] <- Topics]
     end;
 
 
@@ -257,8 +258,6 @@ subscriptions(["add", ClientId, Topic, QoS]) ->
          end,
    if_valid_qos(QoS, Add);
 
-
-
 subscriptions(["del", ClientId]) ->
    Ok = emqttd:subscriber_down(bin(ClientId)),
    ?PRINT("~p~n", [Ok]);
@@ -266,7 +265,6 @@ subscriptions(["del", ClientId]) ->
 subscriptions(["del", ClientId, Topic]) ->
    Ok = emqttd:unsubscribe(bin(Topic), bin(ClientId)),
    ?PRINT("~p~n", [Ok]);
-
 
 subscriptions(_) ->
     ?USAGE([{"subscriptions list",                         "List all subscriptions"},
@@ -459,7 +457,7 @@ trace_on(Who, Name, LogFile) ->
 
 trace_off(Who, Name) ->
     case emqttd_trace:stop_trace({Who, iolist_to_binary(Name)}) of
-        ok -> 
+        ok ->
             ?PRINT("stop tracing ~s ~s successfully.~n", [Who, Name]);
         {error, Error} ->
             ?PRINT("stop tracing ~s ~s error: ~p.~n", [Who, Name, Error])
@@ -507,11 +505,6 @@ print(Routes = [#mqtt_route{topic = Topic} | _]) ->
     Nodes = [atom_to_list(Node) || #mqtt_route{node = Node} <- Routes],
     ?PRINT("~s -> ~s~n", [Topic, string:join(Nodes, ",")]);
 
-%% print(Subscriptions = [#mqtt_subscription{subid = ClientId} | _]) ->
-%%    TopicTable = [io_lib:format("~s:~w", [Topic, Qos])
-%%                  || #mqtt_subscription{topic = Topic, qos = Qos} <- Subscriptions],
-%%    ?PRINT("~s -> ~s~n", [ClientId, string:join(TopicTable, ",")]);
-
 %% print(Topics = [#mqtt_topic{}|_]) ->
 %%    foreach(fun print/1, Topics);
 
@@ -552,15 +545,6 @@ print({ClientId, _ClientPid, _Persistent, SessInfo}) ->
            "mqueue_len=~w, mqueue_dropped=~w, awaiting_rel=~w, "
            "deliver_msg=~w, enqueue_msg=~w, created_at=~w)~n",
             [ClientId | [format(Key, get_value(Key, Data)) || Key <- InfoKeys]]).
-
-print(subscription, {mqtt_subscription, Sub, {_Share, Topic}}) when is_pid(Sub) ->
-    ?PRINT("~p -> ~s~n", [Sub, Topic]);
-print(subscription, {mqtt_subscription, Sub, Topic}) when is_pid(Sub) ->
-    ?PRINT("~p -> ~s~n", [Sub, Topic]);
-print(subscription, {mqtt_subscription, Sub, {_Share, Topic}}) ->
-    ?PRINT("~s -> ~s~n", [Sub, Topic]);
-print(subscription, {mqtt_subscription, Sub, Topic}) ->
-    ?PRINT("~s -> ~s~n", [Sub, Topic]);
 
 print(subscription, {Sub, {_Share, Topic}}) when is_pid(Sub) ->
     ?PRINT("~p -> ~s~n", [Sub, Topic]);
