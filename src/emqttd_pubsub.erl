@@ -147,11 +147,8 @@ group_by_share(Subscribers) ->
 -spec(subscriptions(emqttd:subscriber()) ->
              [{binary(), emqttd:subscriber(), list(emqttd:suboption())}]).
 subscriptions(Subscriber) ->
-    lists:map(fun(#mqtt_subscription{value = {_Share, Topic}}) ->
-                      subscription(Topic, Subscriber);
-                 (#mqtt_subscription{value = Topic}) ->
-                      subscription(Topic, Subscriber)
-              end, ets:lookup(mqtt_subscription, Subscriber)).
+    Topics = ets:match(mqtt_subscription, {'_', {Subscriber, '$1'}, '_'}),
+    [ subscription(Topic, Subscriber) || [Topic] <- Topics ].
 
 subscription(Topic, Subscriber) ->
     {Topic, Subscriber, ets:lookup_element(mqtt_subproperty, {Topic, Subscriber}, 3)}.
@@ -254,13 +251,13 @@ add_subscriber(Topic, Subscriber, Options) ->
 
 add_subscriber_(Share, Topic, Subscriber, Options) ->
     (not ets:member(mqtt_subscriber, Topic)) andalso emqttd_router:add_route(Topic),
-    ets:insert(mqtt_subscription, #mqtt_subscription{key = Subscriber, value = Topic}),
+    ets:insert(mqtt_subscription, #mqtt_subscription{key = {Subscriber, Topic}, value = ok}),
     ets:insert(mqtt_subproperty, #mqtt_subproperty{key = {Topic, Subscriber}, value = Options}),
     ets:insert(mqtt_subscriber, #mqtt_subscriber{key = Topic, value = shared(Share, Subscriber)}).
 
 add_local_subscriber_(Share, Topic, Subscriber, Options) ->
     (not ets:member(mqtt_subscriber, {local, Topic})) andalso emqttd_router:add_local_route(Topic),
-    ets:insert(mqtt_subscription, #mqtt_subscription{key = Subscriber, value = Topic}),
+    ets:insert(mqtt_subscription, #mqtt_subscription{key = {Subscriber, Topic}, value = ok}),
     ets:insert(mqtt_subproperty, #mqtt_subproperty{key = {Topic, Subscriber}, value = Options}),
     ets:insert(mqtt_subscriber, #mqtt_subscriber{key = {local, Topic}, value = shared(Share, Subscriber)}).
 
@@ -273,13 +270,13 @@ del_subscriber(Topic, Subscriber, Options) ->
 
 del_subscriber_(Share, Topic, Subscriber) ->
     ets:delete_object(mqtt_subscriber, #mqtt_subscriber{key = Topic, value = shared(Share, Subscriber)}),
-    ets:delete_object(mqtt_subscription, #mqtt_subscription{key = Subscriber, value = Topic}),
+    ets:delete_object(mqtt_subscription, #mqtt_subscription{key = {Subscriber, Topic}, value = ok}),
     ets:delete(mqtt_subproperty, {Topic, Subscriber}),
     (not ets:member(mqtt_subscriber, Topic)) andalso emqttd_router:del_route(Topic).
 
 del_local_subscriber_(Share, Topic, Subscriber) ->
     ets:delete_object(mqtt_subscriber, #mqtt_subscriber{key = {local, Topic}, value = shared(Share, Subscriber)}),
-    ets:delete_object(mqtt_subscription, #mqtt_subscription{key = Subscriber, value = Topic}),
+    ets:delete_object(mqtt_subscription, #mqtt_subscription{key = {Subscriber, Topic}, value = ok}),
     ets:delete(mqtt_subproperty, {Topic, Subscriber}),
     (not ets:member(mqtt_subscriber, {local, Topic})) andalso emqttd_router:del_local_route(Topic).
 
