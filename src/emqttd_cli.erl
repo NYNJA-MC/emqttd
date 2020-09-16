@@ -233,15 +233,15 @@ topics(_) ->
             {"topics show <Topic>", "Show a topic"}]).
 
 subscriptions(["list"]) ->
-    lists:foreach(fun(#mqtt_subscription{key = {_Subscriber, _Topic} = Subscription}) ->
+    lists:foreach(fun(Subscription) ->
                       print(subscription, Subscription)
                   end, ets:tab2list(mqtt_subscription));
 
 subscriptions(["show", ClientId0]) ->
     ClientId = bin(ClientId0),
-    case ets:match(mqtt_subscription, {'_', {ClientId, '$1'}, '_'}) of
+    case ets:match(mqtt_subscription, {{ClientId, '$1'}}) of
         []     -> ?PRINT_MSG("Not Found.~n");
-        Topics -> [print(subscription, {ClientId, Topic}) || Topic <- Topics]
+        Topics -> [print(subscription, {ClientId, Topic}) || [Topic] <- Topics]
     end;
 
 
@@ -504,11 +504,6 @@ print([]) ->
 print(Routes = [#mqtt_route{topic = Topic} | _]) ->
     Nodes = [atom_to_list(Node) || #mqtt_route{node = Node} <- Routes],
     ?PRINT("~s -> ~s~n", [Topic, string:join(Nodes, ",")]);
-
-%% print(Subscriptions = [#mqtt_subscription{subid = ClientId} | _]) ->
-%%    TopicTable = [io_lib:format("~s:~w", [Topic, Qos])
-%%                  || #mqtt_subscription{topic = Topic, qos = Qos} <- Subscriptions],
-%%    ?PRINT("~s -> ~s~n", [ClientId, string:join(TopicTable, ",")]);
 
 %% print(Topics = [#mqtt_topic{}|_]) ->
 %%    foreach(fun print/1, Topics);

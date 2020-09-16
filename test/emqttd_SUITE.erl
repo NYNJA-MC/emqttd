@@ -220,7 +220,7 @@ pubsub(_) ->
     ok = emqttd:subscribe(<<"a/b/c">>, Self, [{qos, 1}]),
     ?assertMatch({error, _}, emqttd:subscribe(<<"a/b/c">>, Self, [{qos, 2}])),
     timer:sleep(10),
-    [[<<"a/b/c">>]] = ets:match(mqtt_subscription, {'_', {Self, '$1'}, '_'}),
+    [[<<"a/b/c">>]] = ets:match(mqtt_subscription, {{Self, '$1'}}),
     [{mqtt_subscriber, <<"a/b/c">>, Self}]   = ets:lookup(mqtt_subscriber, <<"a/b/c">>),
     emqttd:publish(emqttd_message:make(ct, <<"a/b/c">>, <<"hello">>)),
     ?assert(receive {dispatch, <<"a/b/c">>, _} -> true after 2 -> false end),
