@@ -131,7 +131,8 @@ dispatch({_Share, Subs}, Topic, Msg) ->
     dispatch(lists:nth(rand:uniform(length(Subs)), Subs), Topic, Msg).
 
 subscribers(Topic) ->
-    group_by_share(try ets:lookup_element(mqtt_subscriber, Topic, 3) catch error:badarg -> [] end).
+    Subscribers = ets:match(mqtt_subscriber, {{Topic, '$1'}}),
+    group_by_share([S || [S] <- Subscribers]).
 
 group_by_share([]) -> [];
 
@@ -239,7 +240,7 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %%--------------------------------------------------------------------
-%% Internel Functions
+%% Internal Functions
 %%--------------------------------------------------------------------
 
 add_subscriber(Topic, Subscriber, Options) ->
@@ -250,16 +251,16 @@ add_subscriber(Topic, Subscriber, Options) ->
     end.
 
 add_subscriber_(Share, Topic, Subscriber, Options) ->
-    (not ets:member(mqtt_subscriber, Topic)) andalso emqttd_router:add_route(Topic),
-    ets:insert(mqtt_subscription, {{Subscriber, Topic}}),
+    not has_subscriber(Topic) andalso emqttd_router:add_route(Topic),
     ets:insert(mqtt_subproperty, #mqtt_subproperty{key = {Topic, Subscriber}, value = Options}),
-    ets:insert(mqtt_subscriber, #mqtt_subscriber{key = Topic, value = shared(Share, Subscriber)}).
+    ets:insert(mqtt_subscriber, {{Topic, shared(Share, Subscriber)}}),
+    ets:insert(mqtt_subscription, {{Subscriber, Topic}}).
 
 add_local_subscriber_(Share, Topic, Subscriber, Options) ->
-    (not ets:member(mqtt_subscriber, {local, Topic})) andalso emqttd_router:add_local_route(Topic),
+    not has_subscriber({local, Topic}) andalso emqttd_router:add_local_route(Topic),
     ets:insert(mqtt_subscription, {{Subscriber, Topic}}),
     ets:insert(mqtt_subproperty, #mqtt_subproperty{key = {Topic, Subscriber}, value = Options}),
-    ets:insert(mqtt_subscriber, #mqtt_subscriber{key = {local, Topic}, value = shared(Share, Subscriber)}).
+    ets:insert(mqtt_subscriber, {{{local, Topic}, shared(Share, Subscriber)}}).
 
 del_subscriber(Topic, Subscriber, Options) ->
     Share = proplists:get_value(share, Options),
@@ -269,16 +270,16 @@ del_subscriber(Topic, Subscriber, Options) ->
     end.
 
 del_subscriber_(Share, Topic, Subscriber) ->
-    ets:delete_object(mqtt_subscriber, #mqtt_subscriber{key = Topic, value = shared(Share, Subscriber)}),
-    ets:delete_object(mqtt_subscription, {{Subscriber, Topic}}),
-    ets:delete(mqtt_subproperty, {Topic, Subscriber}),
-    (not ets:member(mqtt_subscriber, Topic)) andalso emqttd_router:del_route(Topic).
+      ets:delete_object(mqtt_subscriber, {{Topic, shared(Share, Subscriber)}}),
+      ets:delete_object(mqtt_subscription, {{Subscriber, Topic}}),
+      ets:delete(mqtt_subproperty, {Topic, Subscriber}),
+      not has_subscriber(Topic) andalso emqttd_router:del_route(Topic).
 
 del_local_subscriber_(Share, Topic, Subscriber) ->
-    ets:delete_object(mqtt_subscriber, #mqtt_subscriber{key = {local, Topic}, value = shared(Share, Subscriber)}),
+    ets:delete_object(mqtt_subscriber, {{{local, Topic}, shared(Share, Subscriber)}}),
     ets:delete_object(mqtt_subscription, {{Subscriber, Topic}}),
     ets:delete(mqtt_subproperty, {Topic, Subscriber}),
-    (not ets:member(mqtt_subscriber, {local, Topic})) andalso emqttd_router:del_local_route(Topic).
+    not has_subscriber({local, Topic}) andalso emqttd_router:del_local_route(Topic).
 
 shared(undefined, Subscriber) ->
     Subscriber;
@@ -289,3 +290,5 @@ setstats(State) ->
     emqttd_stats:setstats('subscribers/count', 'subscribers/max', ets:info(mqtt_subscriber, size)),
     State.
 
+has_subscriber(Topic) ->
+    ets:match(mqtt_subscriber, {{Topic, '_'}}, 1) /= '$end_of_table'.

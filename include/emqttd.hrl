@@ -188,4 +188,3 @@
 -type(mqtt_cli() :: #mqtt_cli{}).
 
 -record(mqtt_subproperty, {key,value}).
--record(mqtt_subscriber, {key,value}).
