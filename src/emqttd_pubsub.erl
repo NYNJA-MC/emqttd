@@ -276,7 +276,7 @@ del_subscriber(Subscriber) ->
     Topics = [ Topic || [Topic] <- ets:match(mqtt_subscription, {{Subscriber, '$1'}}) ],
     ets:match_delete(mqtt_subscription, {{Subscriber, '_'}}),
     [ begin
-          ets:delete_object(mqtt_subscriber, {{Topic, Subscriber}}),
+          ets:delete(mqtt_subscriber, {Topic, Subscriber}),
           ets:delete(mqtt_subproperty, {Topic, Subscriber}),
           not has_subscriber(Topic) andalso emqttd_router:del_route(Topic)
       end || Topic <- Topics ],
@@ -290,14 +290,14 @@ del_subscriber(Topic, Subscriber, Options) ->
     end.
 
 del_subscriber_(Share, Topic, Subscriber) ->
-      ets:delete_object(mqtt_subscriber, {{Topic, shared(Share, Subscriber)}}),
-      ets:delete_object(mqtt_subscription, {{Subscriber, Topic}}),
+      ets:delete(mqtt_subscriber, {Topic, shared(Share, Subscriber)}),
+      ets:delete(mqtt_subscription, {Subscriber, Topic}),
       ets:delete(mqtt_subproperty, {Topic, Subscriber}),
       not has_subscriber(Topic) andalso emqttd_router:del_route(Topic).
 
 del_local_subscriber_(Share, Topic, Subscriber) ->
-    ets:delete_object(mqtt_subscriber, {{{local, Topic}, shared(Share, Subscriber)}}),
-    ets:delete_object(mqtt_subscription, {{Subscriber, Topic}}),
+    ets:delete(mqtt_subscriber, {{local, Topic}, shared(Share, Subscriber)}),
+    ets:delete(mqtt_subscription, {Subscriber, Topic}),
     ets:delete(mqtt_subproperty, {Topic, Subscriber}),
     not has_subscriber({local, Topic}) andalso emqttd_router:del_local_route(Topic).
 
