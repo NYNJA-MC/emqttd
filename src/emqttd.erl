@@ -27,8 +27,8 @@
 -export([start/0, env/1, env/2, is_running/1, stop/0]).
 
 %% PubSub API
--export([subscribe/1, subscribe/2, subscribe/3, publish/1,
-         unsubscribe/1, unsubscribe/2, unsubscribe/3]).
+-export([subscribe/1, subscribe/2, subscribe/3, subscribe_batch/3, publish/1,
+         unsubscribe/1, unsubscribe/2, unsubscribe_client/1]).
 
 %% PubSub Management API
 -export([setqos/3, topics/0, subscriptions/1, subscribers/1,
@@ -97,6 +97,10 @@ subscribe(Topic, Subscriber) ->
 subscribe(Topic, Subscriber, Options) ->
     emqttd_pubsub:subscribe(iolist_to_binary(Topic), Subscriber, Options).
 
+-spec(subscribe_batch(list(binary()), subscriber(), [suboption()]) -> ok | pubsub_error()).
+subscribe_batch(Topics, Subscriber, Options) ->
+    emqttd_pubsub:subscribe(Topics, Subscriber, Options).
+
 %% @doc Publish MQTT Message
 -spec(publish(mqtt_message()) -> {ok, mqtt_delivery()} | ignore).
 publish(Msg) ->
@@ -111,9 +115,10 @@ unsubscribe(Topic) ->
 unsubscribe(Topic, Subscriber) ->
     emqttd_pubsub:unsubscribe(iolist_to_binary(Topic), Subscriber).
 
--spec(unsubscribe(iodata(), subscriber(), [suboption()]) -> ok | pubsub_error()).
-unsubscribe(Topic, Subscriber, Options) ->
-    emqttd_pubsub:unsubscribe(iolist_to_binary(Topic), Subscriber, Options).
+%% @doc Unsubscribe client from all topics. Does not work with 'local' or 'share' options.
+-spec(unsubscribe_client(subscriber()) -> ok | pubsub_error()).
+unsubscribe_client(Subscriber) ->
+    emqttd_pubsub:unsubscribe_client(Subscriber).
 
 -spec(setqos(binary(), subscriber(), mqtt_qos()) -> ok).
 setqos(Topic, Subscriber, Qos) ->
