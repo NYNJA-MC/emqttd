@@ -44,10 +44,10 @@ pubsub_pool() ->
 %%--------------------------------------------------------------------
 
 init([]) ->
-    EtsOpts = [{keypos, 2}, named_table, public],
-    ets:new(mqtt_subscriber,   [bag|EtsOpts]),
-    ets:new(mqtt_subscription, [ordered_set, {keypos, 1}, named_table, public]),
-    ets:new(mqtt_subproperty,  [set|EtsOpts]),
+    EtsOpts = [named_table, public],
+    ets:new(mqtt_subscriber,   [ordered_set, {keypos, 1} | EtsOpts]),
+    ets:new(mqtt_subscription, [ordered_set, {keypos, 1} | EtsOpts]),
+    ets:new(mqtt_subproperty,  [set, {keypos, 2} | EtsOpts]),
     {ok, Env} = emqttd:env(pubsub),
     {ok, { {one_for_all, 10, 3600}, [pool_sup(pubsub, Env)]} }.
 

@@ -25,7 +25,7 @@
 
 %% PubSub API.
 -export([subscribe/3, async_subscribe/3, publish/1, publish/2, setqos/3,
-         unsubscribe/2, unsubscribe/3,
+         unsubscribe/2, unsubscribe/3, unsubscribe_client/1,
          async_unsubscribe/3, subscribers/1, subscriptions/1]).
 
 -export([dispatch/2]).
@@ -56,13 +56,13 @@ setqos(Topic, Subscriber, Qos) when is_binary(Topic) ->
     call(pick(Subscriber), {setqos, Topic, Subscriber, Qos}).
 
 %% @doc Subscribe a Topic
--spec(subscribe(binary(), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
-subscribe(Topic, Subscriber, Options) ->
-    call(pick(Topic), {subscribe, Topic, Subscriber, Options}).
+-spec(subscribe(binary() | list(binary()), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
+subscribe(Topics, Subscriber, Options) ->
+    call(pick(Subscriber), {subscribe, Topics, Subscriber, Options}).
 
--spec(async_subscribe(binary(), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
-async_subscribe(Topic, Subscriber, Options) ->
-    cast(pick(Topic), {subscribe, Topic, Subscriber, Options}).
+-spec(async_subscribe(binary() | list(binary()), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
+async_subscribe(Topics, Subscriber, Options) ->
+    cast(pick(Subscriber), {subscribe, Topics, Subscriber, Options}).
 
 -spec(publish(mqtt_message()) -> {ok, mqtt_delivery()} | ignore).
 publish(Msg = #mqtt_message{}) ->
@@ -131,7 +131,8 @@ dispatch({_Share, Subs}, Topic, Msg) ->
     dispatch(lists:nth(rand:uniform(length(Subs)), Subs), Topic, Msg).
 
 subscribers(Topic) ->
-    group_by_share(try ets:lookup_element(mqtt_subscriber, Topic, 3) catch error:badarg -> [] end).
+    Subscribers = ets:match(mqtt_subscriber, {{Topic, '$1'}}),
+    group_by_share([S || [S] <- Subscribers]).
 
 group_by_share([]) -> [];
 
@@ -172,11 +173,15 @@ unsubscribe(Topic, Subscriber) ->
 
 -spec(unsubscribe(binary(), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
 unsubscribe(Topic, Subscriber, Options) ->
-    call(pick(Topic), {unsubscribe, Topic, Subscriber, Options}).
+    call(pick(Subscriber), {unsubscribe, Topic, Subscriber, Options}).
 
 -spec(async_unsubscribe(binary(), emqttd:subscriber(), [emqttd:suboption()]) -> ok).
 async_unsubscribe(Topic, Subscriber, Options) ->
-    cast(pick(Topic), {unsubscribe, Topic, Subscriber, Options}).
+    cast(pick(Subscriber), {unsubscribe, Topic, Subscriber, Options}).
+
+-spec(unsubscribe_client(emqttd:subscriber()) -> ok).
+unsubscribe_client(Subscriber) ->
+    call(pick(Subscriber), {unsubscribe_client, Subscriber}).
 
 call(PubSub, Req) when is_pid(PubSub) ->
     gen_server2:call(PubSub, Req, infinity).
@@ -196,13 +201,17 @@ init([Pool, Id, Env]) ->
     {ok, #state{pool = Pool, id = Id, env = Env},
      hibernate, {backoff, 2000, 2000, 20000}}.
 
-handle_call({subscribe, Topic, Subscriber, Options}, _From, State) ->
-    add_subscriber(Topic, Subscriber, Options),
+handle_call({subscribe, Topics, Subscriber, Options}, _From, State) ->
+    add_subscriber(Topics, Subscriber, Options),
     {reply, ok, setstats(State), hibernate};
 
 handle_call({unsubscribe, Topic, Subscriber, Options}, _From, State) ->
     del_subscriber(Topic, Subscriber, Options),
     {reply, ok, setstats(State), hibernate};
+
+handle_call({unsubscribe_client, Subscriber}, _From, State) ->
+    del_subscriber(Subscriber),
+    {reply, ok, setstats(State)};
 
 handle_call({setqos, Topic, Subscriber, Qos}, _From, State) ->
     Key = {Topic, Subscriber},
@@ -218,8 +227,8 @@ handle_call({setqos, Topic, Subscriber, Qos}, _From, State) ->
 handle_call(Req, _From, State) ->
     ?UNEXPECTED_REQ(Req, State).
 
-handle_cast({subscribe, Topic, Subscriber, Options}, State) ->
-    add_subscriber(Topic, Subscriber, Options),
+handle_cast({subscribe, Topics, Subscriber, Options}, State) ->
+    add_subscriber(Topics, Subscriber, Options),
     {noreply, setstats(State), hibernate};
 
 handle_cast({unsubscribe, Topic, Subscriber, Options}, State) ->
@@ -239,27 +248,39 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %%--------------------------------------------------------------------
-%% Internel Functions
+%% Internal Functions
 %%--------------------------------------------------------------------
 
-add_subscriber(Topic, Subscriber, Options) ->
+add_subscriber(Topic, Subscriber, Options) when is_binary(Topic) ->
+    add_subscriber([Topic], Subscriber, Options);
+add_subscriber(Topics, Subscriber, Options) ->
     Share = proplists:get_value(share, Options),
     case ?is_local(Options) of
-        false -> add_subscriber_(Share, Topic, Subscriber, Options);
-        true  -> add_local_subscriber_(Share, Topic, Subscriber, Options)
+        false -> add_subscriber_(Share, Topics, Subscriber, Options);
+        true  -> add_local_subscriber_(Share, Topics, Subscriber, Options)
     end.
 
-add_subscriber_(Share, Topic, Subscriber, Options) ->
-    (not ets:member(mqtt_subscriber, Topic)) andalso emqttd_router:add_route(Topic),
-    ets:insert(mqtt_subscription, {{Subscriber, Topic}}),
-    ets:insert(mqtt_subproperty, #mqtt_subproperty{key = {Topic, Subscriber}, value = Options}),
-    ets:insert(mqtt_subscriber, #mqtt_subscriber{key = Topic, value = shared(Share, Subscriber)}).
+add_subscriber_(Share, Topics, Subscriber, Options) ->
+    lists:foreach(fun(Topic) -> not has_subscriber(Topic) andalso emqttd_router:add_route(Topic) end, Topics),
+    ets:insert(mqtt_subproperty, [ #mqtt_subproperty{key = {Topic, Subscriber}, value = Options} || Topic <- Topics ]),
+    ets:insert(mqtt_subscriber, [ {{Topic, shared(Share, Subscriber)}} || Topic <- Topics ]),
+    ets:insert(mqtt_subscription, [ {{Subscriber, Topic}} || Topic <- Topics ]).
 
-add_local_subscriber_(Share, Topic, Subscriber, Options) ->
-    (not ets:member(mqtt_subscriber, {local, Topic})) andalso emqttd_router:add_local_route(Topic),
-    ets:insert(mqtt_subscription, {{Subscriber, Topic}}),
-    ets:insert(mqtt_subproperty, #mqtt_subproperty{key = {Topic, Subscriber}, value = Options}),
-    ets:insert(mqtt_subscriber, #mqtt_subscriber{key = {local, Topic}, value = shared(Share, Subscriber)}).
+add_local_subscriber_(Share, Topics, Subscriber, Options) ->
+    lists:foreach(fun(Topic) -> not has_subscriber({local, Topic}) andalso emqttd_router:add_local_route(Topic) end, Topics),
+    ets:insert(mqtt_subproperty, [ #mqtt_subproperty{key = {Topic, Subscriber}, value = Options} || Topic <- Topics ]),
+    ets:insert(mqtt_subscriber, [ {{{local, Topic}, shared(Share, Subscriber)}} || Topic <- Topics ]),
+    ets:insert(mqtt_subscription, [ {{Subscriber, Topic}} || Topic <- Topics ]).
+
+del_subscriber(Subscriber) ->
+    Topics = [ Topic || [Topic] <- ets:match(mqtt_subscription, {{Subscriber, '$1'}}) ],
+    ets:match_delete(mqtt_subscription, {{Subscriber, '_'}}),
+    [ begin
+          ets:delete(mqtt_subscriber, {Topic, Subscriber}),
+          ets:delete(mqtt_subproperty, {Topic, Subscriber}),
+          not has_subscriber(Topic) andalso emqttd_router:del_route(Topic)
+      end || Topic <- Topics ],
+    ok.
 
 del_subscriber(Topic, Subscriber, Options) ->
     Share = proplists:get_value(share, Options),
@@ -269,16 +290,16 @@ del_subscriber(Topic, Subscriber, Options) ->
     end.
 
 del_subscriber_(Share, Topic, Subscriber) ->
-    ets:delete_object(mqtt_subscriber, #mqtt_subscriber{key = Topic, value = shared(Share, Subscriber)}),
-    ets:delete_object(mqtt_subscription, {{Subscriber, Topic}}),
-    ets:delete(mqtt_subproperty, {Topic, Subscriber}),
-    (not ets:member(mqtt_subscriber, Topic)) andalso emqttd_router:del_route(Topic).
+      ets:delete(mqtt_subscriber, {Topic, shared(Share, Subscriber)}),
+      ets:delete(mqtt_subscription, {Subscriber, Topic}),
+      ets:delete(mqtt_subproperty, {Topic, Subscriber}),
+      not has_subscriber(Topic) andalso emqttd_router:del_route(Topic).
 
 del_local_subscriber_(Share, Topic, Subscriber) ->
-    ets:delete_object(mqtt_subscriber, #mqtt_subscriber{key = {local, Topic}, value = shared(Share, Subscriber)}),
-    ets:delete_object(mqtt_subscription, {{Subscriber, Topic}}),
+    ets:delete(mqtt_subscriber, {{local, Topic}, shared(Share, Subscriber)}),
+    ets:delete(mqtt_subscription, {Subscriber, Topic}),
     ets:delete(mqtt_subproperty, {Topic, Subscriber}),
-    (not ets:member(mqtt_subscriber, {local, Topic})) andalso emqttd_router:del_local_route(Topic).
+    not has_subscriber({local, Topic}) andalso emqttd_router:del_local_route(Topic).
 
 shared(undefined, Subscriber) ->
     Subscriber;
@@ -289,3 +310,5 @@ setstats(State) ->
     emqttd_stats:setstats('subscribers/count', 'subscribers/max', ets:info(mqtt_subscriber, size)),
     State.
 
+has_subscriber(Topic) ->
+    ets:match(mqtt_subscriber, {{Topic, '_'}}, 1) /= '$end_of_table'.
