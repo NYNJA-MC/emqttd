@@ -334,7 +334,7 @@ trace(recv, Packet, ProtoState) ->
     ?LOCAL_LOG(info, "RECV ~s", [emqttd_packet:format(Packet)], ProtoState);
 
 trace(send, Packet, ProtoState) ->
-    ?LOCAL_LOG(info, "SEND ~s", [emqttd_packet:format(Packet)], ProtoState).
+    ?LOCAL_LOG(debug, "SEND ~s", [emqttd_packet:format(Packet)], ProtoState).
 
 inc_stats(_Direct, _Type, Stats = #proto_stats{enable_stats = false}) ->
     Stats;
